@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0d0d0d"/>
+<title>AutoLead Brasil</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══════════════════════════════════════════
+     AUTH
+═══════════════════════════════════════════ -->
+<div id="sc-auth" class="auth">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="icon">🚗</div>
+      <h1>AutoLead Brasil</h1>
+      <div class="tagline">Prospecção Automotiva Profissional</div>
+      <div class="auth-feats">
+        <div class="auth-feat"><div class="dot"></div>Busca por cidade e/ou estado</div>
+        <div class="auth-feat"><div class="dot"></div>Resultados salvos no banco de dados</div>
+        <div class="auth-feat"><div class="dot"></div>Data de abertura via CNPJ</div>
+        <div class="auth-feat"><div class="dot"></div>Contato direto pelo WhatsApp</div>
+        <div class="auth-feat"><div class="dot"></div>Exportação de leads em CSV</div>
+        <div class="auth-feat"><div class="dot"></div>Registro de lojas e status de contato</div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="acard">
+      <h2 id="atitle">Bem-vindo de volta</h2>
+      <p class="desc" id="adesc">Entre na sua conta para acessar os leads.</p>
+      <div class="fl"><label>E-mail</label><input id="ie" type="email" placeholder="seu@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')doAuth()"/></div>
+      <div class="fl"><label>Senha</label><input id="ip" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()"/></div>
+      <div id="ifw" class="fl" style="display:none"><label>Nome completo</label><input id="iname" placeholder="Seu nome completo" autocomplete="name"/></div>
+      <div id="ip2w" class="fl" style="display:none"><label>Confirmar senha</label><input id="ip2" type="password" placeholder="••••••••"/></div>
+      <button class="bp" onclick="doAuth()" id="abtn">Entrar</button>
+      <div class="divider">ou</div>
+      <button class="bgh" id="tgbtn" onclick="tgAuth()">Criar conta grátis</button>
+      <div class="errt" id="aerr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN APP
+═══════════════════════════════════════════ -->
+<div id="sc-main" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+  <!-- Mobile topbar -->
+  <div class="mob-topbar">
+    <div class="hamburger" id="hambtn" onclick="toggleDrawer()">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="mob-logo">AutoLead <span>Brasil</span></div>
+    <button class="btn-theme" onclick="toggleTheme()">☀️</button>
+    <div class="mob-av" id="mob-av">U</div>
+  </div>
+
+  <!-- Mobile drawer overlay -->
+  <div class="mob-overlay" id="mob-overlay" onclick="closeDrawer()"></div>
+
+  <!-- Mobile drawer -->
+  <div class="mob-drawer" id="mob-drawer">
+    <div class="drawer-head">
+      <div class="av" id="drawer-av">U</div>
+      <div class="drawer-user">
+        <div class="nm" id="drawer-nm">Usuário</div>
+        <div class="em" id="drawer-em">email</div>
+      </div>
+      <div class="close-drawer" onclick="closeDrawer()">✕</div>
+    </div>
+    <div class="drawer-nav">
+      <div class="drawer-ni on" id="dnb" onclick="go('b');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Buscar Empresas
+      </div>
+      <div class="drawer-ni" id="dnf" onclick="go('f');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Favoritos
+      </div>
+      <div class="drawer-ni" id="dnh" onclick="go('h');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Histórico
+      </div>
+      <div class="drawer-ni" id="dns" onclick="go('s');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Lojas Registradas
+      </div>
+      <div class="drawer-ni" id="dne" onclick="go('e');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar CSV
+      </div>
+    </div>
+    <div class="drawer-foot">
+      <button class="btn-theme" onclick="toggleTheme()" style="width:100%;border-radius:8px;padding:10px;font-size:13px;margin-bottom:8px;justify-content:center;gap:8px">🌙 Alternar tema</button>
+      <button class="drawer-logout" onclick="logout()">↩ Sair da conta</button>
+    </div>
+  </div>
+
+  <!-- Desktop + mobile content area -->
+  <div class="lay" style="flex:1;overflow:hidden">
+
+    <!-- Desktop sidebar -->
+    <div class="side">
+      <div class="slogo"><div class="nm">🚗 AutoLead</div><div class="tg">Brasil · Automotivo</div></div>
+      <div class="suser">
+        <div class="av" id="sav">U</div>
+        <div class="uinfo"><div class="unm" id="snm">Usuário</div><div class="uemail" id="semail">email</div></div>
+      </div>
+      <nav class="nav">
+        <div class="nav-section">Menu</div>
+        <div class="ni on" id="nb" onclick="go('b')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Buscar Empresas
+        </div>
+        <div class="ni" id="nf" onclick="go('f')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Favoritos
+        </div>
+        <div class="ni" id="nh" onclick="go('h')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico
+        </div>
+        <div class="ni" id="ns" onclick="go('s')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Lojas
+        </div>
+        <div class="ni" id="ne" onclick="go('e')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exportar CSV
+        </div>
+      </nav>
+      <div class="side-theme-row">
+        <button class="btn-theme" onclick="toggleTheme()">☀️</button>
+        <button class="blg" onclick="logout()">↩ Sair da conta</button>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="cnt" id="mc"></div>
+  </div>
+
+  <!-- Bottom navigation (mobile) -->
+  <div class="bot-nav">
+    <div class="bot-nav-inner">
+      <div class="bnav-item on" id="bnb" onclick="go('b')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Buscar
+      </div>
+      <div class="bnav-item" id="bnf" onclick="go('f')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Favs
+      </div>
+      <div class="bnav-item" id="bnh" onclick="go('h')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Histórico
+      </div>
+      <div class="bnav-item" id="bns" onclick="go('s')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Lojas
+      </div>
+      <div class="bnav-item" id="bne" onclick="go('e')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </div>
+    </div>
+  </div>
+
+</div><!-- sc-main -->
+
+<!-- ═══════════════════════════════════════════
+     MODAL — REGISTRAR LOJA
+═══════════════════════════════════════════ -->
+<div id="modal-store" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeStoreModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📋 Registrar Loja</h3>
+      <button class="modal-close" onclick="closeStoreModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="st-coid"/>
+      <div class="fl">
+        <label>Nome da Empresa *</label>
+        <input id="st-nome" placeholder="Nome da empresa"/>
+      </div>
+      <div class="fl">
+        <label>Status</label>
+        <select id="st-status">
+          <option value="contato">Em contato</option>
+          <option value="cliente">Já é cliente</option>
+          <option value="retorno">Possível retorno</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label>Telefone</label>
+        <input id="st-tel" placeholder="(00) 00000-0000"/>
+      </div>
+      <div class="fl">
+        <label>Endereço</label>
+        <input id="st-end" placeholder="Endereço completo"/>
+      </div>
+      <div class="modal-row-2">
+        <div class="fl" style="flex:1;margin-bottom:.8rem">
+          <label>Cidade</label>
+          <input id="st-cid" placeholder="Cidade"/>
+        </div>
+        <div class="fl uf-col" style="width:90px;margin-bottom:.8rem">
+          <label>UF</label>
+          <input id="st-uf" placeholder="UF" maxlength="2" style="text-transform:uppercase"/>
+        </div>
+      </div>
+      <div class="fl">
+        <label>Observações</label>
+        <textarea id="st-obs" placeholder="Ex: já esteve em contato em jan/2025, aguardando retorno..."></textarea>
+      </div>
+      <div class="errt" id="st-err" style="display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeStoreModal()">Cancelar</button>
+      <button class="bp" id="st-btn" onclick="submitStore()" style="width:auto;padding:10px 22px;font-size:13px">Salvar Loja</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

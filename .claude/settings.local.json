@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Projetos\\\\autolead_python\" -Recurse -Force)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "PowerShell($root = \"c:\\\\Projetos\\\\autolead_python\"; Get-ChildItem -Path $root -Depth 2 | ForEach-Object { if \\($_.PSIsContainer\\) { Write-Host \"DIR: $\\($_.FullName\\)\" } else { Write-Host \"FILE: $\\($_.FullName\\)\" } })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projetos\\\\autolead_python\" -Depth 0 | Where-Object { -not $_.PSIsContainer } | Select-Object Name, Length)",
+      "PowerShell(ls \"c:\\\\Projetos\\\\autolead_python\" | Where-Object { -not $_.PSIsContainer })"
+    ]
+  }
+}
