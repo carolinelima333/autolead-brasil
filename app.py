@@ -46,11 +46,11 @@ _BLOCK_WORDS = frozenset({
     'reforma de pneu', 'conserto de pneu', 'recapagem',
 })
 
-_MAX_PAGES     = 3      # Google Places retorna até 20/página → máx 60 por query
+_MAX_PAGES     = 2      # Google Places retorna até 20/página → máx 40 por query
 _TOKEN_DELAY   = 2.0    # delay obrigatório entre páginas (next_page_token)
-_MAX_CITIES    = 10     # cidades a varrer quando nenhuma cidade é informada
-_RETRY         = 3      # tentativas por requisição
-_BACKOFF_BASE  = 2      # segundos base para backoff exponencial
+_MAX_CITIES    = 3      # cidades a varrer quando nenhuma cidade é informada (reduzido para Vercel)
+_RETRY         = 2      # tentativas por requisição
+_BACKOFF_BASE  = 1      # segundos base para backoff exponencial
 
 # Capital de cada UF — usada como fallback quando BrasilAPI falha
 _CAPITAIS: dict[str, str] = {
