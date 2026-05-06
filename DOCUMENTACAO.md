@@ -82,7 +82,7 @@ O **AutoLead Brasil** é uma plataforma web de prospecção de leads no setor au
                                                            │
 ┌──────────────────────────────────────────────────────────┘
 │                SUPABASE (PostgreSQL)
-│  nbigfrdezkozzwqozvlp.supabase.co
+│  xxxxxxxxxxxxxxxxxxxx.supabase.co
 │
 │  Tabelas:
 │  • searches      — cache + histórico de pesquisas
@@ -139,7 +139,7 @@ autolead_python/
 ### Arquivo `.env` (raiz do projeto)
 
 ```env
-GOOGLE_API_KEY=AIzaSyAijbBmi0VPf_NPJ5LRM-rXvmKRAOILp_A
+GOOGLE_API_KEY=AIzaSy_SUA_CHAVE_GOOGLE_AQUI
 PORT=3000
 ```
 
@@ -148,8 +148,8 @@ PORT=3000
 ### Credenciais Supabase (hardcoded no frontend — `app.js`)
 
 ```javascript
-const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
-const SUPA_KEY = 'sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p';
+const SUPA_URL = 'https://xxxxxxxxxxxxxxxxxxxx.supabase.co';
+const SUPA_KEY = 'sb_publishable_SUA_ANON_KEY_SUPABASE_AQUI';
 ```
 
 > A `SUPA_KEY` é a chave **pública/publishable** (anon key). É seguro expô-la no navegador.  
@@ -157,7 +157,7 @@ const SUPA_KEY = 'sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p';
 
 ### Google Cloud — APIs que precisam estar ativadas
 
-No [Google Cloud Console](https://console.cloud.google.com), com a chave `AIzaSyAijbBmi0VPf_NPJ5LRM-rXvmKRAOILp_A`:
+No [Google Cloud Console](https://console.cloud.google.com), com a chave configurada no `.env`:
 
 | API | Para que serve |
 |-----|----------------|
@@ -357,8 +357,8 @@ Serve os arquivos estáticos do diretório `frontend/`.
 ### Constantes globais
 
 ```javascript
-const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
-const SUPA_KEY = 'sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p';
+const SUPA_URL = 'https://xxxxxxxxxxxxxxxxxxxx.supabase.co';
+const SUPA_KEY = 'sb_publishable_SUA_ANON_KEY_SUPABASE_AQUI';
 
 const TERMS_VENDEDORES  = ['distribuidora de pneus', 'atacadista de pneus',
                            'loja de pneus', 'revenda de pneus', 'pneus truck center'];
@@ -547,8 +547,8 @@ fetchCNPJ(raw)
 
 ## 7. Banco de Dados — Supabase
 
-**Projeto:** `nbigfrdezkozzwqozvlp`  
-**URL:** `https://nbigfrdezkozzwqozvlp.supabase.co`  
+**Projeto:** `xxxxxxxxxxxxxxxxxxxx` *(substitua pelo ID do seu projeto)*  
+**URL:** `https://xxxxxxxxxxxxxxxxxxxx.supabase.co`  
 **RLS:** Desabilitado em todas as tabelas (a autenticação é local, não via Supabase Auth)
 
 ### Script de setup (`supabase_setup.sql`)
@@ -625,8 +625,8 @@ Controle de rate limit (máximo 10 pesquisas/dia por localidade+modo).
 ### 8.1 Google Places Text Search API
 
 **URL:** `https://maps.googleapis.com/maps/api/place/textsearch/json`  
-**Chave:** `AIzaSyAijbBmi0VPf_NPJ5LRM-rXvmKRAOILp_A`  
-**Chamada por:** Backend (Python/Flask) — a chave nunca é exposta ao navegador.
+**Chave:** definida em `.env` como `GOOGLE_API_KEY` — nunca exposta ao navegador.  
+**Chamada por:** Backend (Python/Flask).
 
 **Parâmetros enviados:**
 ```
@@ -646,7 +646,7 @@ pagetoken = <next_page_token> (quando paginando)
 ### 8.2 Google Place Details API
 
 **URL:** `https://maps.googleapis.com/maps/api/place/details/json`  
-**Chave:** `AIzaSyAijbBmi0VPf_NPJ5LRM-rXvmKRAOILp_A`  
+**Chave:** a mesma `GOOGLE_API_KEY` do `.env`  
 **Chamada por:** Backend via `GET /api/details`
 
 **Campos solicitados:**
@@ -711,7 +711,7 @@ Quando uma API de CNPJ bloqueia a requisição do navegador por CORS, o frontend
 ### 8.8 Supabase JS SDK
 
 **CDN:** `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`  
-**Chave pública:** `sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p`
+**Chave pública (anon key):** definida como `SUPA_KEY` em `app.js` — é seguro expor no navegador.
 
 Usado para: leitura/gravação nas 4 tabelas (searches, favorites, stores, search_limits).
 
@@ -912,9 +912,9 @@ pip install -r requirements.txt
 
 ### 2. Configurar o `.env`
 
-O arquivo já existe na raiz com:
+Crie o arquivo na raiz com:
 ```env
-GOOGLE_API_KEY=AIzaSyAijbBmi0VPf_NPJ5LRM-rXvmKRAOILp_A
+GOOGLE_API_KEY=AIzaSy_SUA_CHAVE_GOOGLE_AQUI
 PORT=3000
 ```
 
