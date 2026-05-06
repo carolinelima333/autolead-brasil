@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 .env
 *.log
+node_modules/
 INICIAR_MAC.sh
 INICIAR_WINDOWS.bat
 backend/
