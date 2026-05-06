@@ -1,7 +1,15 @@
 // ─── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
 const SUPA_KEY = 'sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p';
-const SEARCH_TERMS = ['borracharia', 'loja de pneus', 'auto center', 'pneus'];
+// Termos de busca por modo
+const TERMS_VENDEDORES  = ['distribuidora de pneus','atacadista de pneus','loja de pneus','revenda de pneus','pneus truck center'];
+const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviario','logistica transporte cargas'];
+
+// CNAEs: 4530-7/01 = Atacado pneus/peças | 4530-7/02 = Varejo pneus | 4930-2/02 = Transp. rodoviário cargas
+const CNAE_VENDEDOR  = ['4530701','4530702'];
+const CNAE_COMPRADOR = ['4930202'];
+const CNAE_BLOQUEADO = ['4520006']; // Serviços de borracharia
+
 const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 const MAX_DAILY = 10;
 const CACHE_TTL_DAYS = 7;
@@ -9,9 +17,12 @@ const CACHE_TTL_DAYS = 7;
 // ─── ESTADO ───────────────────────────────────────────────────
 let sb = null;
 let user = null, signup = false, ctab = 'b';
-let cos = [], favs = new Set(), hist = [], filterType = 'todos';
+let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'todos';
+let searchMode = 'vendedores';
 let theme = localStorage.getItem('al_theme') || 'dark';
 let currentStoreIdx = undefined;
+let currentPage = 0;
+const PAGE_SIZE = 30;
 
 // ─── HELPERS ──────────────────────────────────────────────────
 const g = id => document.getElementById(id);
@@ -82,10 +93,11 @@ function doAuth() {
   if (g('semail')) g('semail').textContent = user.email;
   if (g('drawer-nm')) g('drawer-nm').textContent = n;
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
+  loadFavs();
   go('b');
 }
 function logout() {
-  user = null; cos = []; favs = new Set(); hist = []; filterType = 'todos';
+  user = null; cos = []; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
   g('ie').value = ''; g('ip').value = '';
@@ -121,6 +133,10 @@ function pBuscar(c) {
     </div>
     <div class="search-panel">
       <h3>🔍 Pesquise aqui</h3>
+      <div class="mode-selector">
+        <button class="mode-btn${searchMode==='vendedores'?' active':''}" onclick="setSearchMode('vendedores')">🏪 Lojas &amp; Atacadistas</button>
+        <button class="mode-btn${searchMode==='compradores'?' active':''}" onclick="setSearchMode('compradores')">🚛 Frotistas / Compradores</button>
+      </div>
       <div class="srow">
         <select id="suf">${opts}</select>
         <input id="scid" placeholder="Cidade (opcional — vazio busca todo o estado)" autocomplete="off"/>
@@ -131,9 +147,10 @@ function pBuscar(c) {
       </div>
       <div class="type-pills">
         <span class="pill ${filterType==='todos'?'active':''}" onclick="setFilter('todos')">Todos</span>
-        <span class="pill ${filterType==='pneus'?'active':''}" onclick="setFilter('pneus')">🔵 Pneus</span>
-        <span class="pill ${filterType==='borr'?'active':''}" onclick="setFilter('borr')">🟡 Borracharias</span>
-        <span class="pill ${filterType==='auto'?'active':''}" onclick="setFilter('auto')">⚙️ Auto Centers</span>
+        <span class="pill ${filterType==='atacado'?'active':''}" onclick="setFilter('atacado')">📦 Atacadistas</span>
+        <span class="pill ${filterType==='loja'?'active':''}" onclick="setFilter('loja')">🔵 Lojas de Pneus</span>
+        <span class="pill ${filterType==='frotista'?'active':''}" onclick="setFilter('frotista')">🚛 Frotistas</span>
+        <span class="pill ${filterType==='novo'?'active':''}" onclick="setFilter('novo')">🆕 Leads Novos</span>
       </div>
     </div>
     <div class="cnpj-panel">
@@ -148,6 +165,7 @@ function pBuscar(c) {
   if (cos.length > 0) exibir();
 }
 function setFilter(t) { filterType = t; pBuscar(g('mc')); }
+function setSearchMode(mode) { searchMode = mode; pBuscar(g('mc')); }
 
 // ─── SUPABASE: RATE LIMIT ─────────────────────────────────────
 async function checkRateLimit(searchKey) {
@@ -176,38 +194,67 @@ async function incrementRateLimit(searchKey) {
   } catch(e) { console.warn('Rate limit:', e); }
 }
 
-// ─── SUPABASE: CACHE ──────────────────────────────────────────
+// ─── SUPABASE: CACHE / HISTÓRICO ──────────────────────────────
 async function checkCache(searchKey) {
   if (!sb) return null;
   try {
-    const { data } = await sb.from('searches')
+    const { data, error } = await sb.from('searches')
       .select('results,updated_at').eq('search_key', searchKey).maybeSingle();
+    if (error) { console.warn('[cache] leitura:', error.message); return null; }
     if (!data || !data.results) return null;
     const ageDays = (Date.now() - new Date(data.updated_at).getTime()) / 86400000;
     return ageDays > CACHE_TTL_DAYS ? null : data.results;
-  } catch(e) { return null; }
+  } catch(e) { console.warn('[cache] checkCache:', e); return null; }
 }
 async function saveToCache(searchKey, uf, city, results) {
-  if (!sb) return;
+  if (!sb) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
   try {
-    await sb.from('searches').upsert(
+    const { error } = await sb.from('searches').upsert(
       { search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
       { onConflict: 'search_key' }
     );
-  } catch(e) { console.warn('Cache save:', e); }
+    if (error) throw error;
+  } catch(e) {
+    console.error('[cache] saveToCache:', e);
+    showToast('Erro ao salvar no banco: ' + (e.message || e), 'red');
+  }
+}
+
+// ─── SUPABASE: FAVORITOS ──────────────────────────────────────
+async function loadFavs() {
+  if (!sb || !user) return;
+  try {
+    const { data, error } = await sb.from('favorites')
+      .select('place_id, company_data')
+      .eq('user_email', user.email);
+    if (error) throw error;
+    (data || []).forEach(f => {
+      favs.add(f.place_id);
+      if (f.company_data) favData.set(f.place_id, { ...f.company_data, id: f.place_id });
+    });
+  } catch(e) { console.warn('[favs] loadFavs:', e); }
 }
 
 // ─── CHAMADAS AO BACKEND ──────────────────────────────────────
-async function apiTextSearch(query) {
-  const r = await fetch('/api/search?query=' + encodeURIComponent(query));
+
+/**
+ * Busca um termo com paginação automática no backend.
+ * O backend percorre até 3 páginas (≤60 resultados) e, quando cidade está
+ * vazia, itera sobre as principais cidades do estado via BrasilAPI.
+ *
+ * Retorna array de { place_id, name, formatted_address, rating, place_types }
+ */
+async function apiBuscarTermo(uf, cidade, termo) {
+  const params = new URLSearchParams({ uf, query: termo });
+  if (cidade) params.set('cidade', cidade);
+  const r = await fetch('/api/buscar?' + params);
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.error || 'Erro no servidor (' + r.status + ')');
   }
   const d = await r.json();
-  if (d.status === 'REQUEST_DENIED') throw new Error('API Key recusada: ' + (d.error_message || 'verifique a chave no .env do servidor'));
-  if (d.status === 'ZERO_RESULTS') return [];
-  if (d.status !== 'OK') throw new Error('Google Places: ' + d.status);
+  const denied = (d.errors || []).find(e => e.includes('REQUEST_DENIED') || e.includes('DENIED'));
+  if (denied) throw new Error('API Key recusada: ' + denied);
   return d.results || [];
 }
 async function apiDetails(placeId) {
@@ -229,11 +276,53 @@ async function apiDetails(placeId) {
 }
 function detectTipo(types, nome) {
   const n = (nome || '').toLowerCase();
-  if (n.includes('pneu') || n.includes('tyre') || n.includes('tire')) return 'Loja de Pneus';
-  if (n.includes('borracharia')) return 'Borracharia';
+  if (n.includes('distribuidora') || n.includes('atacadista') || n.includes('atacado de pneu')) return 'Atacadista de Pneus';
+  if (n.includes('pneu') || n.includes('tyre') || n.includes('tire') || n.includes('revenda de pneu')) return 'Loja de Pneus';
+  if (n.includes('transport') || n.includes('frete') || n.includes('logística') || n.includes('logistica') || n.includes('frota')) return 'Frotista / Transportadora';
+  if (n.includes('borracharia') || n.includes('borracha')) return 'Borracharia';
   if (n.includes('auto center') || n.includes('autocenter')) return 'Auto Center';
-  if (types.includes('car_repair')) return 'Mecânica / Auto Center';
-  return 'Auto Center';
+  if (types.includes('car_repair')) return 'Auto Center';
+  return 'Comércio Automotivo';
+}
+
+// Converte resultado bruto do Places Text Search para o formato de card.
+// Telefone e site ficam vazios até o usuário clicar em "Carregar contato".
+function textToCard(p, idx) {
+  const nome = p.name || '';
+  const rating = p.rating;
+  return {
+    _idx: idx,
+    id: p.place_id || '',
+    nome,
+    endereco: p.formatted_address || '',
+    cidade: '', uf: '',
+    telefone: p.phone || '',
+    website:  p.website || '',
+    avaliacao: rating != null ? parseFloat(rating).toFixed(1) : '—',
+    tipo: detectTipo(p.place_types || [], nome),
+    lat: null, lon: null,
+    abertura: null,
+    gmaps_url: '',
+    _detailsLoaded: !!(p.phone || p.website),
+  };
+}
+
+// Carrega telefone/site/maps sob demanda para um card específico.
+async function loadDetails(idx) {
+  const co = cos[idx]; if (!co) return;
+  const btn = g('det_' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Carregando...'; }
+  const details = await apiDetails(co.id);
+  if (details) {
+    co.telefone  = details.telefone  || '';
+    co.website   = details.website   || '';
+    co.gmaps_url = details.gmaps_url || '';
+    co.lat       = details.lat;
+    co.lon       = details.lon;
+  }
+  co._detailsLoaded = true;
+  const cardEl = document.querySelector(`.cc[data-idx="${idx}"]`);
+  if (cardEl) cardEl.replaceWith(mkCard(co));
 }
 
 // ─── BUSCAR ───────────────────────────────────────────────────
@@ -242,8 +331,9 @@ async function buscar() {
   const cid = (g('scid').value || '').trim();
   if (!uf) { alert('Selecione o estado.'); return; }
 
-  const searchKey = cid ? `${uf}_${cid.replace(/\s+/g,'_').toLowerCase()}` : uf;
-  const local = cid ? `${cid}, ${uf}, Brasil` : `estado ${uf}, Brasil`;
+  const baseKey    = cid ? `${uf}_${cid.replace(/\s+/g,'_').toLowerCase()}` : uf;
+  const searchKey  = `${baseKey}_${searchMode}`;
+  const modeLabel  = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
   const displayLoc = cid ? `${cid}, ${uf}` : `${uf} (estado inteiro)`;
 
   const limit = await checkRateLimit(searchKey);
@@ -282,12 +372,15 @@ async function buscar() {
 
     setP(20, 'Buscando no Google Places...');
     const allResults = [], seenIds = new Set();
+    const termos = searchMode === 'compradores' ? TERMS_COMPRADORES : TERMS_VENDEDORES;
 
-    for (let i = 0; i < SEARCH_TERMS.length; i++) {
-      const termo = SEARCH_TERMS[i];
-      setP(20 + Math.round((i / SEARCH_TERMS.length) * 40), 'Buscando ' + termo + '...');
+    for (let i = 0; i < termos.length; i++) {
+      const termo = termos[i];
+      setP(20 + Math.round((i / termos.length) * 60), 'Buscando "' + termo + '"...');
       try {
-        const items = await apiTextSearch(termo + ' em ' + local);
+        // Backend faz paginação automática (até 60 resultados) e
+        // itera cidades via BrasilAPI quando cidade não é informada.
+        const items = await apiBuscarTermo(uf, cid, termo);
         for (const p of items) {
           if (!seenIds.has(p.place_id)) { seenIds.add(p.place_id); allResults.push(p); }
         }
@@ -298,27 +391,21 @@ async function buscar() {
 
     if (allResults.length === 0) {
       cos = [];
-      hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: 0 });
+      hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: 0, mode: searchMode });
       await incrementRateLimit(searchKey);
       g('res').innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa encontrada em ${displayLoc}.</p><small>Tente outra cidade ou verifique se a Places API está ativada na chave do servidor.</small></div>`;
       g('bbs').disabled = false;
       return;
     }
 
-    const slice = allResults.slice(0, 30);
-    const resultados = [];
-    for (let i = 0; i < slice.length; i += 5) {
-      setP(65 + Math.round((i / slice.length) * 30), `Detalhes (${Math.min(i+5,slice.length)}/${slice.length})...`);
-      const lote = await Promise.allSettled(slice.slice(i, i+5).map(p => apiDetails(p.place_id)));
-      lote.forEach(r => { if (r.status === 'fulfilled' && r.value) resultados.push(r.value); });
-    }
+    setP(85, `Processando ${allResults.length} resultados...`);
+    cos = allResults.map((p, i) => textToCard(p, i));
+    currentPage = 0;
 
-    setP(97, 'Salvando no banco...');
-    cos = resultados;
-    cos.forEach((c, i) => c._idx = i);
+    setP(95, 'Salvando no banco...');
     await incrementRateLimit(searchKey);
-    await saveToCache(searchKey, uf, cid, resultados);
-    hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length });
+    await saveToCache(searchKey, uf, cid, cos);
+    hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, mode: searchMode });
     setP(100, 'Concluído!');
     setTimeout(() => exibir(), 300);
 
@@ -333,44 +420,112 @@ async function buscar() {
   g('bbs').disabled = false;
 }
 
-// ─── EXIBIR ───────────────────────────────────────────────────
+// ─── EXIBIR (paginado) ────────────────────────────────────────
 function exibir() {
   const el = g('res'); if (!el) return;
   let lista = cos;
-  if (filterType === 'pneus') lista = cos.filter(x => x.tipo === 'Loja de Pneus');
-  else if (filterType === 'borr') lista = cos.filter(x => x.tipo.includes('Borracharia'));
-  else if (filterType === 'auto') lista = cos.filter(x => x.tipo === 'Auto Center' || x.tipo.includes('Mecânica'));
-  el.innerHTML = `<div class="results-header"><div class="count"><span>${lista.length}</span> empresa${lista.length!==1?'s':''} encontrada${lista.length!==1?'s':''}</div></div>`;
-  if (!lista.length) { el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`; return; }
+  if      (filterType === 'atacado')  lista = cos.filter(x => x.tipo === 'Atacadista de Pneus');
+  else if (filterType === 'loja')     lista = cos.filter(x => x.tipo === 'Loja de Pneus');
+  else if (filterType === 'frotista') lista = cos.filter(x => x.tipo === 'Frotista / Transportadora');
+  else if (filterType === 'novo')     lista = cos.filter(x => x._isNovo === true);
+
+  const total = lista.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage >= totalPages) currentPage = 0;
+  const start = currentPage * PAGE_SIZE;
+  const pagina = lista.slice(start, start + PAGE_SIZE);
+
+  el.innerHTML = `
+    <div class="results-header">
+      <div class="count"><span>${total}</span> empresa${total!==1?'s':''} encontrada${total!==1?'s':''}</div>
+      ${totalPages > 1 ? `<div class="page-info">Página ${currentPage+1} de ${totalPages}</div>` : ''}
+    </div>`;
+
+  if (!pagina.length) {
+    el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
+    return;
+  }
   const gr = document.createElement('div'); gr.className = 'grid';
-  lista.forEach(x => gr.appendChild(mkCard(x)));
+  pagina.forEach(x => gr.appendChild(mkCard(x)));
   el.appendChild(gr);
+  if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
+}
+
+function mkPagination(current, total) {
+  const nav = document.createElement('div'); nav.className = 'pagination';
+  const pages = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (current > 2) pages.push('…');
+    for (let i = Math.max(1, current - 1); i <= Math.min(total - 2, current + 1); i++) pages.push(i);
+    if (current < total - 3) pages.push('…');
+    pages.push(total - 1);
+  }
+  const prev = current > 0
+    ? `<button class="page-btn" onclick="setPage(${current-1})">← Anterior</button>` : '';
+  const next = current < total - 1
+    ? `<button class="page-btn" onclick="setPage(${current+1})">Próxima →</button>` : '';
+  const nums = pages.map(p => p === '…'
+    ? `<span class="page-ellipsis">…</span>`
+    : `<button class="page-btn${p===current?' active':''}" onclick="setPage(${p})">${p+1}</button>`
+  ).join('');
+  nav.innerHTML = prev + nums + next;
+  return nav;
+}
+
+function setPage(n) {
+  currentPage = n;
+  exibir();
+  const el = g('res'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ─── CARD ─────────────────────────────────────────────────────
 function mkCard(co) {
   const d = document.createElement('div'); d.className = 'cc';
   const idx = co._idx !== undefined ? co._idx : 0;
+  d.dataset.idx = idx;
   const iF = favs.has(co.id);
   const rat = parseFloat(co.avaliacao) || 0;
   const st = '★'.repeat(Math.round(rat)) + '☆'.repeat(5 - Math.round(rat));
   const aHTML = co.abertura
     ? `<div class="cc-since">📅 Aberta desde ${fmtData(co.abertura)} · ${calcIdade(co.abertura)}</div>`
     : `<div class="cc-no-since" id="abe_${idx}">📅 Data de abertura — consulte o CNPJ</div>`;
+
+  // Telefone: carrega sob demanda se ainda não foi buscado
+  const phoneHtml = co.telefone
+    ? `<div class="cc-phone">📞 ${co.telefone}</div>`
+    : co._detailsLoaded
+      ? `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não disponível</div>`
+      : `<div class="cc-phone"><button class="ab" id="det_${idx}" onclick="loadDetails(${idx})">📞 Carregar contato</button></div>`;
+
+  const mapsBtn = co.gmaps_url
+    ? `<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>`
+    : co.lat ? `<button class="ab" onclick="openMap(${co.lat},${co.lon})">🗺 Mapa</button>` : '';
+  const siteBtn = co.website ? `<button class="ab" onclick="window.open('${co.website}','_blank')">🌐 Site</button>` : '';
+  const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wppIdx(${idx})">💬 WhatsApp</button>` : '';
+
+  const leadBadge = co._isNovo
+    ? `<span class="badge-novo">🆕 Lead Novo</span>`
+    : co._leadStatus === 'bloqueado' ? `<span class="badge-bad">🚫 Descartado</span>`
+    : co._leadStatus === 'comprador' ? `<span class="badge-blue">🚛 Frotista</span>`
+    : co._leadStatus === 'aprovado'  ? `<span class="badge-ok">✅ Aprovado</span>`
+    : '';
+
   d.innerHTML = `
     <div class="cc-top">
       <div class="cc-name">${co.nome}</div>
       <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${co.avaliacao}</div></div>
     </div>
+    ${leadBadge ? `<div style="margin-bottom:5px">${leadBadge}</div>` : ''}
     <div class="cc-type">${co.tipo}</div>
     <div class="cc-addr">📍 ${co.endereco}${co.cidade?', '+co.cidade:''}${co.uf?'/'+co.uf:''}</div>
-    <div class="cc-phone">${co.telefone?'📞 '+co.telefone:'<span style="color:var(--txt3);font-size:11px">Telefone não disponível</span>'}</div>
+    ${phoneHtml}
     ${aHTML}
     <hr class="cc-sep"/>
     <div class="cacts">
-      ${co.gmaps_url?`<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>`:co.lat?`<button class="ab" onclick="openMap(${co.lat},${co.lon})">🗺 Mapa</button>`:''}
-      ${co.website?`<button class="ab" onclick="window.open('${co.website}','_blank')">🌐 Site</button>`:''}
-      ${co.telefone?`<button class="ab wpp" onclick="wppIdx(${idx})">💬 WhatsApp</button>`:''}
+      ${mapsBtn}${siteBtn}${wppBtn}
       <button class="ab ${iF?'fva':''}" id="fv_${idx}" onclick="tgFav(${idx})">${iF?'★ Salvo':'☆ Favoritar'}</button>
       <button class="ab ${co.abertura?'cnpj-loaded':''}" onclick="tgCNPJ(${idx})" id="cbtn_${idx}">${co.abertura?'✅ CNPJ':'🔎 CNPJ'}</button>
       <button class="ab ab-store" onclick="openStoreModal(${idx})">📋 Registrar</button>
@@ -385,18 +540,79 @@ function mkCard(co) {
     </div>`;
   return d;
 }
-function tgFav(idx) {
+async function tgFav(idx) {
   const co = cos[idx]; if (!co) return;
-  favs.has(co.id) ? favs.delete(co.id) : favs.add(co.id);
+  const isFav = favs.has(co.id);
+  if (isFav) {
+    favs.delete(co.id); favData.delete(co.id);
+    if (sb && user) {
+      const { error } = await sb.from('favorites').delete()
+        .eq('user_email', user.email).eq('place_id', co.id);
+      if (error) { favs.add(co.id); favData.set(co.id, co); showToast('Erro ao remover favorito', 'red'); return; }
+    }
+  } else {
+    favs.add(co.id); favData.set(co.id, co);
+    if (sb && user) {
+      const { error } = await sb.from('favorites').upsert(
+        { user_email: user.email, place_id: co.id, company_data: co },
+        { onConflict: 'user_email,place_id' }
+      );
+      if (error) { favs.delete(co.id); favData.delete(co.id); showToast('Erro ao salvar favorito', 'red'); return; }
+    }
+    showToast('Favorito salvo!');
+  }
   const b = g('fv_'+idx); if (!b) return;
   b.textContent = favs.has(co.id) ? '★ Salvo' : '☆ Favoritar';
   b.classList.toggle('fva', favs.has(co.id));
+}
+
+async function unfavById(placeId) {
+  favs.delete(placeId); favData.delete(placeId);
+  if (sb && user) {
+    const { error } = await sb.from('favorites').delete()
+      .eq('user_email', user.email).eq('place_id', placeId);
+    if (error) { showToast('Erro ao remover favorito', 'red'); return; }
+  }
+  // Atualiza card na aba de busca se ainda visível
+  const i = cos.findIndex(c => c.id === placeId);
+  if (i >= 0) { const b = g('fv_'+i); if (b) { b.textContent = '☆ Favoritar'; b.classList.remove('fva'); } }
+  if (ctab === 'f') pFavs(g('mc'));
 }
 function tgCNPJ(idx) {
   const f = g('ci_'+idx); if (!f) return;
   f.style.display = f.style.display === 'block' ? 'none' : 'block';
 }
 function wppIdx(idx) { const co = cos[idx]; if (co) wpp(co.telefone, co.nome); }
+
+// ─── VALIDAÇÃO DE LEAD (CNAE / MEI / Porte / Novo) ────────────
+function isWithin24Months(isoDate) {
+  if (!isoDate) return false;
+  const parts = isoDate.split(/[-\/]/);
+  const d = new Date(+parts[0], +parts[1] - 1, +(parts[2] || 1));
+  return (new Date() - d) / (30.44 * 24 * 3600 * 1000) <= 24;
+}
+
+function validateLead(d) {
+  const code  = (d.cnae_code || '').replace(/\D/g, '');
+  const nome  = ((d.razao_social || '') + ' ' + (d.nome_fantasia || '')).toLowerCase();
+  const porte = (d.porte || '').toUpperCase();
+  const BLOCK_NOME = ['borracharia','borrachas','borracheiro','reforma de pneu','conserto de pneu','recapagem'];
+  const nomeBlock = BLOCK_NOME.some(w => nome.includes(w));
+  const isMEI     = d.is_mei === true;
+  const isNovo    = isWithin24Months(d.data_inicio_atividade);
+  const isVend    = CNAE_VENDEDOR.includes(code);
+  const isComp    = CNAE_COMPRADOR.includes(code);
+  const isCnaeBlk = CNAE_BLOQUEADO.includes(code);
+  const isME_EPP  = porte.includes('MICRO') || porte.includes('PEQUENO');
+
+  if (nomeBlock || isCnaeBlk) return { status:'bloqueado', label:'🚫 Descartado',       cls:'badge-bad',  msg:`CNAE ${code||'?'} — serviço de reparo/borracharia` };
+  if (isMEI)                  return { status:'filtrado',  label:'⚠️ MEI',              cls:'badge-yel',  msg:'Microempreendedor Individual — fora do foco comercial' };
+  if (isComp)                 return { status:'comprador', label:'🚛 Frotista',          cls:'badge-blue', msg:'Transportadora — potencial compradora de pneus em larga escala' };
+  if (isVend && isNovo)       return { status:'novo',      label:'🆕 Lead Novo',         cls:'badge-novo', msg:'CNAE de comércio de pneus · empresa aberta há < 24 meses — prioridade alta' };
+  if (isVend)                 return { status:'aprovado',  label:'✅ Aprovado',           cls:'badge-ok',   msg:'CNAE confirma comércio de pneus (atacado ou varejo)' };
+  if (isME_EPP)               return { status:'potencial', label:'📦 ME/EPP — Verificar', cls:'badge-yel',  msg:`Porte compatível · CNAE ${code||'não mapeado'} — verifique manualmente` };
+  return { status:'indefinido', label:'❓ Verificar', cls:'badge-yel', msg:`CNAE ${code||'não informado'} — classificação manual necessária` };
+}
 
 // ─── CNPJ ─────────────────────────────────────────────────────
 function maskCNPJ(inp) {
@@ -417,13 +633,40 @@ async function bCNPJCard(idx) {
   try {
     const d = await fetchCNPJ(raw);
     const co = cos[idx];
-    if (co) { co.abertura = d.data_inicio_atividade || null; co.cnpj = raw; }
+    const lead = validateLead(d);
+    const isNovo = isWithin24Months(d.data_inicio_atividade);
+    if (co) {
+      co.abertura     = d.data_inicio_atividade || null;
+      co.cnpj         = raw;
+      co.porte        = d.porte || '';
+      co.cnae         = d.cnae || '';
+      co.cnae_code    = d.cnae_code || '';
+      co._leadStatus  = lead.status;
+      co._isNovo      = isNovo;
+    }
     const ok = (d.situacao||'').toLowerCase().includes('ativa');
-    const badge = ok ? '<span class="badge-ok">● Ativa</span>' : `<span class="badge-bad">● ${d.situacao||'Inativa'}</span>`;
-    res.innerHTML = `${badge} Aberta em <strong>${fmtData(d.data_inicio_atividade)}</strong> · ${calcIdade(d.data_inicio_atividade)}<br><span style="font-size:10px;color:var(--txt3)">${d.razao_social||''}</span>`;
+    const situBadge = ok ? '<span class="badge-ok">● Ativa</span>' : `<span class="badge-bad">● ${d.situacao||'Inativa'}</span>`;
+    res.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+        ${situBadge}
+        <span class="${lead.cls}">${lead.label}</span>
+        ${isNovo ? '<span class="badge-novo">🆕 &lt; 24 meses</span>' : ''}
+      </div>
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${lead.msg}</div>
+      <strong>${fmtData(d.data_inicio_atividade)}</strong> · ${calcIdade(d.data_inicio_atividade)}<br>
+      <span style="font-size:10px;color:var(--txt3)">${d.razao_social||''} · Porte: ${d.porte||'—'} · CNAE: ${d.cnae_code||'—'} ${d.cnae?'('+d.cnae.substring(0,45)+')':''}</span>`;
     const abeEl = g('abe_'+idx);
     if (abeEl && d.data_inicio_atividade) abeEl.outerHTML = `<div class="cc-since">📅 Aberta desde ${fmtData(d.data_inicio_atividade)} · ${calcIdade(d.data_inicio_atividade)}</div>`;
-    const cbtn = g('cbtn_'+idx); if (cbtn) { cbtn.textContent = '✅ CNPJ'; cbtn.classList.add('cnpj-loaded'); }
+    const cbtn = g('cbtn_'+idx);
+    if (cbtn) {
+      cbtn.textContent = isNovo ? '🆕 Lead Novo' : lead.status === 'bloqueado' ? '🚫 CNPJ' : lead.status === 'aprovado' ? '✅ CNPJ' : '📋 CNPJ';
+      cbtn.classList.add('cnpj-loaded');
+    }
+    // Atualiza badge no card caso seja novo
+    if (isNovo || lead.status === 'aprovado' || lead.status === 'bloqueado') {
+      const cardEl = document.querySelector(`.cc[data-idx="${idx}"]`);
+      if (cardEl) cardEl.replaceWith(mkCard(co));
+    }
   } catch(e) {
     res.innerHTML = `<span style="color:var(--red)">⚠ CNPJ não encontrado. Verifique o número.</span>`;
   }
@@ -441,9 +684,11 @@ async function qCNPJ() {
       <div class="cnpj-card">
         <div class="razao">${d.razao_social||'—'}</div>
         ${d.nome_fantasia?`<div style="font-size:12px;color:var(--txt2);margin-bottom:.5rem">${d.nome_fantasia}</div>`:''}
-        <div style="margin-bottom:.8rem">
+        <div style="margin-bottom:.8rem;display:flex;flex-wrap:wrap;gap:5px">
           ${ok?'<span class="badge-ok">● Ativa</span>':`<span class="badge-bad">● ${d.situacao||'Inativa'}</span>`}
-          ${d.natureza?`<span class="badge-yel" style="margin-left:6px">${d.natureza}</span>`:''}
+          ${(()=>{ const l=validateLead(d); return `<span class="${l.cls}">${l.label}</span>`; })()}
+          ${isWithin24Months(d.data_inicio_atividade)?'<span class="badge-novo">🆕 Lead Novo</span>':''}
+          ${d.natureza?`<span class="badge-yel">${d.natureza}</span>`:''}
         </div>
         <div class="cnpj-grid">
           <div class="cnpj-item"><div class="k">📅 Data de Abertura</div><div class="v" style="color:var(--green);font-weight:700">${d.data_inicio_atividade?fmtData(d.data_inicio_atividade):'Não informado'}</div></div>
@@ -461,17 +706,19 @@ async function qCNPJ() {
 }
 async function fetchCNPJ(raw) {
   function parseBrasil(d) {
-    return { razao_social:d.razao_social||'', nome_fantasia:d.nome_fantasia||'', situacao:d.descricao_situacao_cadastral||'', data_inicio_atividade:d.data_inicio_atividade||'', municipio:d.municipio||'', uf:d.uf||'', telefone:d.ddd_telefone_1?'('+d.ddd_telefone_1+') '+(d.telefone_1||''):'', cnae:d.cnae_fiscal_descricao||'', porte:d.porte||'', natureza:d.natureza_juridica?d.natureza_juridica.split(' - ')[0]:'' };
+    return { razao_social:d.razao_social||'', nome_fantasia:d.nome_fantasia||'', situacao:d.descricao_situacao_cadastral||'', data_inicio_atividade:d.data_inicio_atividade||'', municipio:d.municipio||'', uf:d.uf||'', telefone:d.ddd_telefone_1?'('+d.ddd_telefone_1+') '+(d.telefone_1||''):'', cnae:d.cnae_fiscal_descricao||'', cnae_code:String(d.cnae_fiscal||''), porte:d.porte||'', natureza:d.natureza_juridica?d.natureza_juridica.split(' - ')[0]:'', is_mei:d.opcao_pelo_mei===true };
   }
   function parseReceita(d) {
     if (!d.nome||d.status==='ERROR') return null;
     const dt = d.abertura?d.abertura.split('/').reverse().join('-'):'';
-    return { razao_social:d.nome||'', nome_fantasia:d.fantasia||'', situacao:d.situacao||'', data_inicio_atividade:dt, municipio:d.municipio||'', uf:d.uf||'', telefone:d.telefone||'', cnae:(d.atividade_principal&&d.atividade_principal[0]&&d.atividade_principal[0].text)||'', porte:d.porte||'', natureza:d.natureza_juridica||'' };
+    const cnaeCode = ((d.atividade_principal&&d.atividade_principal[0]&&d.atividade_principal[0].code)||'').replace(/\D/g,'');
+    return { razao_social:d.nome||'', nome_fantasia:d.fantasia||'', situacao:d.situacao||'', data_inicio_atividade:dt, municipio:d.municipio||'', uf:d.uf||'', telefone:d.telefone||'', cnae:(d.atividade_principal&&d.atividade_principal[0]&&d.atividade_principal[0].text)||'', cnae_code:cnaeCode, porte:d.porte||'', natureza:d.natureza_juridica||'', is_mei:d.opcao_pelo_mei===true||(d.natureza_juridica||'').toLowerCase().includes('microempreendedor') };
   }
   function parsePub(d) {
     if (!d.razao_social) return null;
     const est = d.estabelecimento||{};
-    return { razao_social:d.razao_social||'', nome_fantasia:est.nome_fantasia||'', situacao:est.situacao_cadastral||'', data_inicio_atividade:est.data_inicio_atividade||'', municipio:(est.cidade&&est.cidade.nome)||'', uf:(est.estado&&est.estado.sigla)||'', telefone:est.ddd1?'('+est.ddd1+') '+(est.telefone1||''):'', cnae:(est.atividade_principal&&est.atividade_principal.descricao)||'', porte:(d.porte&&d.porte.descricao)||'', natureza:(d.natureza_juridica&&d.natureza_juridica.descricao)||'' };
+    const cnaeCode = ((est.cnae_fiscal_principal&&est.cnae_fiscal_principal.codigo)||'').replace(/\D/g,'');
+    return { razao_social:d.razao_social||'', nome_fantasia:est.nome_fantasia||'', situacao:est.situacao_cadastral||'', data_inicio_atividade:est.data_inicio_atividade||'', municipio:(est.cidade&&est.cidade.nome)||'', uf:(est.estado&&est.estado.sigla)||'', telefone:est.ddd1?'('+est.ddd1+') '+(est.telefone1||''):'', cnae:(est.atividade_principal&&est.atividade_principal.descricao)||'', cnae_code:cnaeCode, porte:(d.porte&&d.porte.descricao)||'', natureza:(d.natureza_juridica&&d.natureza_juridica.descricao)||'', is_mei:false };
   }
   const APIS = [
     { url:'https://brasilapi.com.br/api/cnpj/v1/'+raw, parse:parseBrasil },
@@ -502,27 +749,149 @@ async function fetchCNPJ(raw) {
 
 // ─── FAVORITOS ────────────────────────────────────────────────
 function pFavs(c) {
-  const fs = cos.filter(x => favs.has(x.id));
-  c.innerHTML = `<div class="page-header"><h1>Favoritos</h1><p>${fs.length} empresa${fs.length!==1?'s':''} salva${fs.length!==1?'s':''}</p></div>`;
+  // Mescla: favoritos do banco + itens favoritados na sessão atual
+  const map = new Map(favData);
+  cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
+  const fs = Array.from(map.values());
+
+  c.innerHTML = `<div class="page-header"><h1>Favoritos</h1><p>${fs.length} empresa${fs.length!==1?'s':''} salva${fs.length!==1?'s':''} — persistido no banco</p></div>`;
   if (!fs.length) { c.innerHTML += `<div class="empty"><div class="ei">⭐</div><p>Nenhum favorito ainda.</p><small>Favorite empresas na aba de busca.</small></div>`; return; }
   const gr = document.createElement('div'); gr.className = 'grid';
-  fs.forEach(x => gr.appendChild(mkCard(x)));
+  fs.forEach(co => gr.appendChild(mkFavCard(co)));
   c.appendChild(gr);
 }
 
+function mkFavCard(co) {
+  const d = document.createElement('div'); d.className = 'cc';
+  const rat = parseFloat(co.avaliacao) || 0;
+  const st = '★'.repeat(Math.round(rat)) + '☆'.repeat(5 - Math.round(rat));
+  const pid = (co.id || '').replace(/'/g, '');
+  const phoneHtml = co.telefone
+    ? `<div class="cc-phone">📞 ${co.telefone}</div>`
+    : `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Sem telefone registrado</div>`;
+  const aHTML = co.abertura
+    ? `<div class="cc-since">📅 Aberta desde ${fmtData(co.abertura)} · ${calcIdade(co.abertura)}</div>`
+    : '';
+  const mapsBtn = co.gmaps_url ? `<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>` : '';
+  const siteBtn = co.website ? `<button class="ab" onclick="window.open('${co.website}','_blank')">🌐 Site</button>` : '';
+  const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wpp('${co.telefone.replace(/'/g,'').replace(/"/g,'')}','${co.nome.replace(/'/g,'').replace(/"/g,'')}')">💬 WhatsApp</button>` : '';
+  d.innerHTML = `
+    <div class="cc-top">
+      <div class="cc-name">${co.nome}</div>
+      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${co.avaliacao}</div></div>
+    </div>
+    <div class="cc-type">${co.tipo || ''}</div>
+    <div class="cc-addr">📍 ${co.endereco || ''}${co.cidade?', '+co.cidade:''}${co.uf?'/'+co.uf:''}</div>
+    ${phoneHtml}${aHTML}
+    <hr class="cc-sep"/>
+    <div class="cacts">
+      ${mapsBtn}${siteBtn}${wppBtn}
+      <button class="ab fva" onclick="unfavById('${pid}')">★ Remover</button>
+    </div>`;
+  return d;
+}
+
 // ─── HISTÓRICO ────────────────────────────────────────────────
-function pHist(c) {
-  c.innerHTML = `<div class="page-header"><h1>Histórico</h1><p>${hist.length} busca${hist.length!==1?'s':''} realizada${hist.length!==1?'s':''}</p></div>`;
-  if (!hist.length) { c.innerHTML += `<div class="empty"><div class="ei">🕐</div><p>Nenhuma busca ainda.</p><small>Faça sua primeira busca.</small></div>`; return; }
+async function pHist(c) {
+  c.innerHTML = `
+    <div class="page-header"><h1>Histórico de Pesquisas</h1><p>Clique em <strong>Restaurar</strong> para recarregar sem consumir a API</p></div>
+    <div id="hist-content"><div class="ld"><div class="spin"></div><div style="color:var(--txt2)">Carregando...</div></div></div>`;
+
+  let supaHist = [];
+  if (sb) {
+    try {
+      const { data } = await sb.from('searches')
+        .select('search_key, state, city, results, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(100);
+      supaHist = data || [];
+    } catch(e) { console.warn('Hist load:', e); }
+  }
+
+  // Adiciona buscas da sessão atual que ainda não estão no banco
+  const supaKeys = new Set(supaHist.map(h => h.search_key));
+  for (const h of hist.slice().reverse()) {
+    const base = h.cidade ? `${h.uf}_${h.cidade.replace(/\s+/g,'_').toLowerCase()}` : h.uf;
+    const key  = `${base}_${h.mode || 'vendedores'}`;
+    if (!supaKeys.has(key)) {
+      supaHist.unshift({ search_key: key, state: h.uf, city: h.cidade || null,
+        results: null, updated_at: null, _qtd: h.qtd, _data: h.data });
+    }
+  }
+
+  const el = g('hist-content'); if (!el) return;
+  if (!supaHist.length) {
+    el.innerHTML = `<div class="empty"><div class="ei">🕐</div><p>Nenhuma busca ainda.</p><small>Faça sua primeira pesquisa na aba Buscar.</small></div>`;
+    return;
+  }
+
   const w = document.createElement('div'); w.className = 'hist-list';
-  hist.slice().reverse().forEach(h => {
+  supaHist.forEach(h => {
     const d = document.createElement('div'); d.className = 'hi';
-    const loc = h.cidade ? `${h.cidade} — ${h.uf}` : `${h.uf} (estado)`;
-    const cache = h.fromCache ? '<span class="badge-cache">⚡ cache</span>' : '';
-    d.innerHTML = `<div><div class="hi-city">${loc} ${cache}</div><div class="hi-dt">🕐 ${h.data}</div></div><div style="text-align:right"><div class="hi-count">${h.qtd}</div><div class="hi-lbl">resultados</div></div>`;
+    const loc = h.city ? `${h.city} — ${h.state}` : `${h.state} (estado inteiro)`;
+    const qtd  = h.results ? h.results.length : (h._qtd ?? '—');
+    const dt   = h.updated_at
+      ? new Date(h.updated_at).toLocaleString('pt-BR')
+      : (h._data || '');
+    const canRestore = h.results && h.results.length > 0;
+    const safeKey  = h.search_key.replace(/'/g, "\\'");
+    const hMode    = h.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
+    const modeBadge = hMode === 'compradores'
+      ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
+      : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
+    d.innerHTML = `
+      <div style="flex:1;min-width:0">
+        <div class="hi-city">${loc}</div>
+        <div style="margin-top:3px">${modeBadge}</div>
+        <div class="hi-dt">🕐 ${dt}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <div style="text-align:right"><div class="hi-count">${qtd}</div><div class="hi-lbl">resultados</div></div>
+        <div style="display:flex;gap:5px">
+          ${canRestore ? `<button class="ab hist-restore" onclick="restoreSearch('${safeKey}')">↩ Restaurar</button>` : ''}
+          ${h.updated_at ? `<button class="ab hist-del" onclick="deleteHistory('${safeKey}')">🗑</button>` : ''}
+        </div>
+      </div>`;
     w.appendChild(d);
   });
-  c.appendChild(w);
+  el.innerHTML = '';
+  el.appendChild(w);
+}
+
+async function restoreSearch(searchKey) {
+  const cached = await checkCache(searchKey);
+  if (!cached || !cached.length) {
+    showToast('Cache expirado — pesquise novamente para atualizar', 'red');
+    return;
+  }
+  // Restaura o modo de busca a partir da chave
+  if (searchKey.endsWith('_compradores')) searchMode = 'compradores';
+  else if (searchKey.endsWith('_vendedores')) searchMode = 'vendedores';
+  cos = cached;
+  cos.forEach((c, i) => c._idx = i);
+  currentPage = 0;
+  filterType = 'todos';
+  const modeLabel = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
+  showToast(`${cos.length} empresas restauradas · ${modeLabel}`);
+  go('b');
+}
+
+async function deleteHistory(searchKey) {
+  if (!confirm('Excluir este histórico de pesquisa?')) return;
+  if (!sb) { showToast('Supabase não conectado', 'red'); return; }
+  try {
+    const { error } = await sb.from('searches').delete().eq('search_key', searchKey);
+    if (error) throw error;
+    // Remove da lista em memória também
+    hist = hist.filter(h => {
+      const k = h.cidade ? `${h.uf}_${h.cidade.replace(/\s+/g,'_').toLowerCase()}` : h.uf;
+      return k !== searchKey;
+    });
+    showToast('Histórico excluído.');
+    pHist(g('mc'));
+  } catch(e) {
+    showToast('Erro ao excluir: ' + (e.message || e), 'red');
+  }
 }
 
 // ─── EXPORTAR ─────────────────────────────────────────────────
@@ -594,11 +963,15 @@ async function pStores(c) {
   el.appendChild(w);
 }
 async function loadStores() {
-  if (!sb) return [];
+  if (!sb || !user) return [];
   try {
-    const { data } = await sb.from('stores').select('*').order('created_at',{ascending:false});
+    const { data, error } = await sb.from('stores')
+      .select('*')
+      .eq('user_email', user.email)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('[stores] loadStores:', error); return []; }
     return data || [];
-  } catch(e) { return []; }
+  } catch(e) { console.warn('[stores] loadStores:', e); return []; }
 }
 function openStoreModal(idx) {
   currentStoreIdx = idx;
@@ -626,23 +999,26 @@ async function submitStore() {
   const btn = g('st-btn');
   if (btn) { btn.disabled=true; btn.textContent='Salvando...'; }
   const storeData = {
+    user_email:   user ? user.email : null,
     company_name: nome,
-    company_id: (g('st-coid')?g('st-coid').value:'')||null,
-    phone: (g('st-tel').value||'').trim()||null,
-    address: (g('st-end').value||'').trim()||null,
-    city: (g('st-cid').value||'').trim()||null,
-    state: (g('st-uf').value||'').trim().toUpperCase()||null,
-    status: g('st-status').value||'contato',
-    notes: (g('st-obs').value||'').trim()||null
+    company_id:   (g('st-coid')?g('st-coid').value:'')||null,
+    phone:        (g('st-tel').value||'').trim()||null,
+    address:      (g('st-end').value||'').trim()||null,
+    city:         (g('st-cid').value||'').trim()||null,
+    state:        (g('st-uf').value||'').trim().toUpperCase()||null,
+    status:       g('st-status').value||'contato',
+    notes:        (g('st-obs').value||'').trim()||null,
   };
   try {
-    if (!sb) throw new Error('Banco de dados não conectado. Verifique a conexão com o Supabase.');
+    if (!sb) throw new Error('Supabase não conectado — verifique a configuração.');
+    if (!user) throw new Error('Faça login para salvar registros.');
     const { error } = await sb.from('stores').insert(storeData);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message || JSON.stringify(error));
     closeStoreModal();
     showToast('Loja registrada com sucesso!');
     if (ctab === 's') go('s');
   } catch(e) {
+    console.error('[stores] submitStore:', e);
     const err = g('st-err'); if (err){ err.textContent='Erro: '+(e.message||'Tente novamente.'); err.style.display='block'; }
   }
   if (btn) { btn.disabled=false; btn.textContent='Salvar Loja'; }

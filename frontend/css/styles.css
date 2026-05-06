@@ -162,7 +162,7 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 .badge-yel{display:inline-flex;align-items:center;gap:.3rem;background:var(--yel-dim);color:var(--yel);border:1px solid rgba(255,193,7,.25);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
 
 /* Cards */
-.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem}
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem}
 .results-header .count{font-size:13px;color:var(--txt2)}
 .results-header .count span{color:#fff;font-weight:700}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
@@ -210,7 +210,7 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 
 /* History */
 .hist-list{display:flex;flex-direction:column;gap:8px}
-.hi{background:var(--g2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center}
+.hi{background:var(--g2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem}
 .hi-city{font-size:14px;font-weight:700;color:#fff}
 .hi-dt{font-size:11px;color:var(--txt3);margin-top:2px}
 .hi-count{font-size:20px;font-weight:900;color:var(--yel);line-height:1}
@@ -353,6 +353,14 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 
 /* badge cache no histórico */
 .badge-cache{display:inline-flex;align-items:center;background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.25);font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;vertical-align:middle;margin-left:4px}
+/* badge lead novo */
+.badge-novo{display:inline-flex;align-items:center;background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.35);font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+/* seletor de modo vendedores/compradores */
+.mode-selector{display:flex;gap:6px;margin-bottom:10px}
+.mode-btn{flex:1;background:var(--g3);border:1px solid var(--border2);border-radius:8px;color:var(--txt2);font-size:12px;font-weight:600;padding:8px 10px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s;touch-action:manipulation;text-align:center}
+.mode-btn:hover{border-color:var(--yel);color:var(--yel)}
+.mode-btn.active{background:rgba(255,193,7,.12);border-color:var(--yel);color:var(--yel)}
+[data-theme="light"] .mode-btn{background:var(--g4)}
 
 /* ══════════════════════════════════════════════
    TOAST
@@ -364,3 +372,25 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
   .bnav-item{font-size:8px;padding:.2rem .1rem}
   .bnav-item svg{width:18px;height:18px}
 }
+
+/* ══════════════════════════════════════════════
+   PAGINAÇÃO
+══════════════════════════════════════════════ */
+.page-info{font-size:12px;color:var(--txt3);font-weight:600}
+.pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:1.5rem;padding-bottom:1.5rem;flex-wrap:wrap}
+.page-btn{background:var(--g2);border:1px solid var(--border2);border-radius:8px;color:var(--txt2);font-size:13px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s;touch-action:manipulation}
+.page-btn:hover{border-color:var(--yel);color:var(--yel)}
+.page-btn.active{background:var(--yel);border-color:var(--yel);color:#000}
+.page-ellipsis{color:var(--txt3);font-size:13px;padding:0 4px}
+[data-theme="light"] .page-btn{background:var(--g3);color:var(--txt2)}
+
+/* ══════════════════════════════════════════════
+   HISTÓRICO — RESTAURAR
+══════════════════════════════════════════════ */
+.hist-restore{font-size:11px;padding:5px 11px;color:var(--green);border-color:rgba(34,197,94,.35)}
+.hist-restore:hover{background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green)}
+.hist-del{font-size:12px;padding:5px 9px;color:var(--red);border-color:rgba(239,68,68,.3)}
+.hist-del:hover{background:rgba(239,68,68,.1);border-color:var(--red)}
+.hi-mode-badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid}
+.hi-mode-vend{background:rgba(255,193,7,.1);color:var(--yel);border-color:rgba(255,193,7,.3)}
+.hi-mode-comp{background:rgba(96,165,250,.1);color:var(--blue);border-color:rgba(96,165,250,.3)}
