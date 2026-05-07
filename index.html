@@ -534,11 +534,11 @@ async function checkCache(searchKey) {
   } catch(e) { console.warn('[cache] checkCache:', e); return null; }
 }
 async function saveToCache(searchKey, uf, city, results) {
-  if (!sb) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
+  if (!sb || !user) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
   try {
     const { error } = await sb.from('searches').upsert(
-      { search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
-      { onConflict: 'search_key' }
+      { user_email: user.email, search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
+      { onConflict: 'user_email,search_key' }
     );
     if (error) throw error;
   } catch(e) {

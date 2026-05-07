@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS stores (
   state        TEXT,
   status       TEXT        DEFAULT 'contato',
   notes        TEXT,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (company_id)
 );
 
 -- 3. Favoritos (persistido por usuário)
@@ -124,6 +125,13 @@ CREATE TRIGGER trg_auto_confirm_user
 -- MIGRATION: recriar searches com a estrutura correta
 -- (searches é apenas cache — sem perda de dados críticos)
 -- ──────────────────────────────────────────────────────────────
+-- ──────────────────────────────────────────────────────────────
+-- MIGRATION: adicionar UNIQUE em stores.company_id
+-- (necessário para upsert com onConflict: 'company_id')
+-- ──────────────────────────────────────────────────────────────
+ALTER TABLE stores
+  ADD CONSTRAINT IF NOT EXISTS stores_company_id_key UNIQUE (company_id);
+
 DROP TABLE IF EXISTS searches CASCADE;
 CREATE TABLE searches (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
