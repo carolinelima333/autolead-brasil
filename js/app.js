@@ -30,9 +30,26 @@ const setErr = m => { g('aerr').textContent = m; g('aerr').style.display = 'bloc
 const clrErr = () => g('aerr').style.display = 'none';
 
 // ─── INIT ─────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try { sb = window.supabase.createClient(SUPA_URL, SUPA_KEY); } catch(e) { console.warn('Supabase:', e); }
   applyTheme(theme);
+  if (sb) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      const u = session.user;
+      const name = u.user_metadata?.name || u.email.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+      user = { email: u.email, name };
+      g('sc-auth').style.display = 'none';
+      g('sc-main').style.display = 'flex';
+      ['sav','mob-av','drawer-av'].forEach(id => { const el = g(id); if (el) el.textContent = name[0].toUpperCase(); });
+      if (g('snm')) g('snm').textContent = name;
+      if (g('semail')) g('semail').textContent = u.email;
+      if (g('drawer-nm')) g('drawer-nm').textContent = name;
+      if (g('drawer-em')) g('drawer-em').textContent = u.email;
+      loadFavs();
+      go('b');
+    }
+  }
 });
 
 // ─── TEMA ─────────────────────────────────────────────────────
@@ -99,9 +116,10 @@ async function doAuth() {
     const { data, error } = await sb.auth.signInWithPassword({ email: e, password: p });
     if (error) { setErr(error.message); return; }
 
+    const supaEmail = data.user.email;
     const meta = data.user?.user_metadata || {};
-    name = name || meta.name || e.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-    user = { email: e, name };
+    name = name || meta.name || supaEmail.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    user = { email: supaEmail, name };
 
     clrErr();
     g('sc-auth').style.display = 'none';
@@ -233,12 +251,17 @@ async function checkCache(searchKey) {
   } catch(e) { console.warn('[cache] checkCache:', e); return null; }
 }
 async function saveToCache(searchKey, uf, city, results) {
-  if (!sb) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
+  if (!sb || !user) return;
   try {
-    const { error } = await sb.from('searches').upsert(
-      { user_email: user.email, search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
-      { onConflict: 'user_email,search_key' }
-    );
+    const { data: existing } = await sb.from('searches')
+      .select('id').eq('user_email', user.email).eq('search_key', searchKey).maybeSingle();
+    const payload = { state: uf, city: city || null, results, updated_at: new Date().toISOString() };
+    let error;
+    if (existing) {
+      ({ error } = await sb.from('searches').update(payload).eq('id', existing.id));
+    } else {
+      ({ error } = await sb.from('searches').insert({ user_email: user.email, search_key: searchKey, ...payload }));
+    }
     if (error) throw error;
   } catch(e) {
     console.error('[cache] saveToCache:', e);
@@ -584,11 +607,15 @@ async function tgFav(idx) {
   } else {
     favs.add(co.id); favData.set(co.id, co);
     if (sb && user) {
-      const { error } = await sb.from('favorites').upsert(
-        { user_email: user.email, place_id: co.id, company_data: co },
-        { onConflict: 'user_email,place_id' }
-      );
-      if (error) { favs.delete(co.id); favData.delete(co.id); showToast('Erro ao salvar favorito', 'red'); return; }
+      const { data: existFav } = await sb.from('favorites')
+        .select('id').eq('user_email', user.email).eq('place_id', co.id).maybeSingle();
+      let favErr;
+      if (existFav) {
+        ({ error: favErr } = await sb.from('favorites').update({ company_data: co }).eq('id', existFav.id));
+      } else {
+        ({ error: favErr } = await sb.from('favorites').insert({ user_email: user.email, place_id: co.id, company_data: co }));
+      }
+      if (favErr) { favs.delete(co.id); favData.delete(co.id); showToast('Erro ao salvar favorito', 'red'); return; }
     }
     showToast('Favorito salvo!');
   }

@@ -63,6 +63,7 @@ DROP POLICY IF EXISTS searches_select ON searches;
 DROP POLICY IF EXISTS searches_insert ON searches;
 DROP POLICY IF EXISTS searches_update ON searches;
 DROP POLICY IF EXISTS searches_delete ON searches;
+DROP POLICY IF EXISTS searches_own ON searches;
 
 CREATE POLICY searches_own ON searches
   FOR ALL TO authenticated
@@ -118,3 +119,25 @@ DROP TRIGGER IF EXISTS trg_auto_confirm_user ON auth.users;
 CREATE TRIGGER trg_auto_confirm_user
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.auto_confirm_new_user();
+
+-- ──────────────────────────────────────────────────────────────
+-- MIGRATION: recriar searches com a estrutura correta
+-- (searches é apenas cache — sem perda de dados críticos)
+-- ──────────────────────────────────────────────────────────────
+DROP TABLE IF EXISTS searches CASCADE;
+CREATE TABLE searches (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_email  TEXT        NOT NULL,
+  search_key  TEXT        NOT NULL,
+  state       TEXT        NOT NULL,
+  city        TEXT,
+  results     JSONB,
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_email, search_key)
+);
+ALTER TABLE searches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS searches_own ON searches;
+CREATE POLICY searches_own ON searches
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');
