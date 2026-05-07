@@ -129,8 +129,15 @@ CREATE TRIGGER trg_auto_confirm_user
 -- MIGRATION: adicionar UNIQUE em stores.company_id
 -- (necessário para upsert com onConflict: 'company_id')
 -- ──────────────────────────────────────────────────────────────
-ALTER TABLE stores
-  ADD CONSTRAINT IF NOT EXISTS stores_company_id_key UNIQUE (company_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'stores_company_id_key' AND table_name = 'stores'
+  ) THEN
+    ALTER TABLE stores ADD CONSTRAINT stores_company_id_key UNIQUE (company_id);
+  END IF;
+END $$;
 
 DROP TABLE IF EXISTS searches CASCADE;
 CREATE TABLE searches (
