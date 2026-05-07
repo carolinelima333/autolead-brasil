@@ -535,10 +535,10 @@ async function incrementRateLimit(modeKey) {
 
 // ─── SUPABASE: CACHE / HISTÓRICO ──────────────────────────────
 async function checkCache(searchKey) {
-  if (!sb) return null;
+  if (!sb || !user) return null;
   try {
     const { data, error } = await sb.from('searches')
-      .select('results,updated_at').eq('search_key', searchKey).maybeSingle();
+      .select('results,updated_at').eq('user_email', user.email).eq('search_key', searchKey).maybeSingle();
     if (error) { console.warn('[cache] leitura:', error.message); return null; }
     if (!data || !data.results) return null;
     const ageDays = (Date.now() - new Date(data.updated_at).getTime()) / 86400000;
@@ -1166,12 +1166,17 @@ async function pHist(c) {
 
   const states = [...new Set(supaHist.map(h => h.state).filter(Boolean))].sort();
   const stateOpts = '<option value="">Todos os estados</option>' + states.map(s => `<option value="${s}">${s}</option>`).join('');
+  const allCities = [...new Set(supaHist.map(h => h.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  const cityOpts  = '<option value="">Todas as cidades</option>' + allCities.map(c => `<option value="${c}">${c}</option>`).join('');
 
   el.innerHTML = `
     <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
       <div class="srow">
-        <select id="hist-state-f" onchange="filterHist()" style="max-width:180px">
+        <select id="hist-state-f" onchange="filterHist(true)" style="max-width:180px">
           ${stateOpts}
+        </select>
+        <select id="hist-city-f" onchange="filterHist()" style="max-width:200px">
+          ${cityOpts}
         </select>
         <select id="hist-mode-f" onchange="filterHist()" style="max-width:220px">
           <option value="">Todos os tipos</option>
@@ -1185,11 +1190,28 @@ async function pHist(c) {
   renderHistItems(supaHist);
 }
 
-function filterHist() {
+function filterHist(stateChanged) {
   const sf = (g('hist-state-f')?.value || '').toUpperCase();
   const mf = g('hist-mode-f')?.value || '';
+  const citySelect = g('hist-city-f');
+
+  // Ao trocar estado, recalcula as cidades disponíveis e reseta seleção
+  if (stateChanged && citySelect) {
+    const allData = window._histData || [];
+    const cities = [...new Set(
+      allData
+        .filter(h => !sf || (h.state||'').toUpperCase() === sf)
+        .map(h => h.city)
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    citySelect.innerHTML = '<option value="">Todas as cidades</option>' +
+      cities.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  const cf = citySelect?.value || '';
   let list = window._histData || [];
   if (sf) list = list.filter(h => (h.state||'').toUpperCase() === sf);
+  if (cf) list = list.filter(h => h.city === cf);
   if (mf === 'compradores') list = list.filter(h => h.search_key.endsWith('_compradores'));
   else if (mf === 'vendedores') list = list.filter(h => !h.search_key.endsWith('_compradores'));
   renderHistItems(list);
