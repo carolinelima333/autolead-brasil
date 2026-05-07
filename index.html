@@ -41,6 +41,11 @@
       <div class="fl"><label>Senha</label><input id="ip" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()"/></div>
       <div id="ifw" class="fl" style="display:none"><label>Nome completo</label><input id="iname" placeholder="Seu nome completo" autocomplete="name"/></div>
       <div id="ip2w" class="fl" style="display:none"><label>Confirmar senha</label><input id="ip2" type="password" placeholder="••••••••"/></div>
+      <div id="pw-hint" style="display:none;margin-bottom:.9rem">
+        <div style="font-size:11px;color:var(--txt3);line-height:1.7;padding:8px 10px;background:rgba(255,193,7,.06);border:1px solid rgba(255,193,7,.15);border-radius:8px">
+          🔐 A senha deve conter no mínimo 6 caracteres, incluindo letra maiúscula, número e caractere especial.
+        </div>
+      </div>
       <button class="bp" onclick="doAuth()" id="abtn">Entrar</button>
       <div class="divider">ou</div>
       <button class="bgh" id="tgbtn" onclick="tgAuth()">Criar conta grátis</button>
@@ -252,16 +257,26 @@ let theme = localStorage.getItem('al_theme') || 'dark';
 let currentStoreIdx = undefined;
 let currentPage = 0;
 const PAGE_SIZE = 30;
+let dailyLimits = { vendedores: 0, compradores: 0 };
 
 // ─── HELPERS ──────────────────────────────────────────────────
 const g = id => document.getElementById(id);
-const setErr = m => { g('aerr').textContent = m; g('aerr').style.display = 'block'; };
-const clrErr = () => g('aerr').style.display = 'none';
+const setErr = m => { const el=g('aerr'); el.textContent=m; el.style.display='block'; el.style.color=''; el.style.background=''; el.style.border=''; };
+const clrErr = () => { const el=g('aerr'); el.style.display='none'; el.style.color=''; el.style.background=''; el.style.border=''; };
 
 // ─── INIT ─────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try { sb = window.supabase.createClient(SUPA_URL, SUPA_KEY); } catch(e) { console.warn('Supabase:', e); }
   applyTheme(theme);
+  if (sb) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session && session.user) { enterApp(session.user); return; }
+    } catch(e) { console.warn('Session:', e); }
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session && !user) enterApp(session.user);
+    });
+  }
 });
 
 // ─── TEMA ─────────────────────────────────────────────────────
@@ -298,21 +313,67 @@ function tgAuth() {
   g('tgbtn').textContent = signup ? 'Já tenho conta' : 'Criar conta grátis';
   g('ifw').style.display = signup ? 'block' : 'none';
   g('ip2w').style.display = signup ? 'block' : 'none';
+  g('pw-hint').style.display = signup ? 'block' : 'none';
   clrErr();
 }
-function doAuth() {
+
+function validatePassword(p) {
+  const errs = [];
+  if (p.length < 6) errs.push('mínimo 6 caracteres');
+  if (!/[A-Z]/.test(p)) errs.push('uma letra maiúscula');
+  if (!/[0-9]/.test(p)) errs.push('um número');
+  if (!/[!@#$%^&*()\-_=+\[\]{};:'",.<>/?\\|`~]/.test(p)) errs.push('um caractere especial');
+  return errs;
+}
+
+async function doAuth() {
   const e = g('ie').value.trim(), p = g('ip').value;
   if (!e || !p) { setErr('Preencha e-mail e senha.'); return; }
   if (!e.includes('@')) { setErr('E-mail inválido.'); return; }
-  if (signup) {
-    const n = g('iname').value.trim(), p2 = g('ip2').value;
-    if (!n) { setErr('Digite seu nome.'); return; }
-    if (p !== p2) { setErr('Senhas não conferem.'); return; }
-    if (p.length < 6) { setErr('Mínimo 6 caracteres.'); return; }
-    user = { email: e, name: n };
-  } else {
-    user = { email: e, name: e.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase()) };
+  const btn = g('abtn');
+  btn.disabled = true;
+  clrErr();
+  try {
+    if (signup) {
+      btn.textContent = 'Criando conta...';
+      const n = g('iname').value.trim(), p2 = g('ip2').value;
+      if (!n) { setErr('Digite seu nome.'); return; }
+      if (p !== p2) { setErr('Senhas não conferem.'); return; }
+      const pwErrs = validatePassword(p);
+      if (pwErrs.length > 0) { setErr('A senha deve conter: ' + pwErrs.join(', ') + '.'); return; }
+      const { data, error } = await sb.auth.signUp({ email: e, password: p, options: { data: { name: n } } });
+      if (error) throw error;
+      if (data.user && !data.session) {
+        const el = g('aerr');
+        el.style.color = 'var(--green)'; el.style.background = 'rgba(34,197,94,.08)'; el.style.border = '1px solid rgba(34,197,94,.2)';
+        el.textContent = '✅ Conta criada! Verifique seu e-mail para ativar o acesso.';
+        el.style.display = 'block';
+        return;
+      }
+      if (data.session) enterApp(data.user);
+    } else {
+      btn.textContent = 'Entrando...';
+      const { data, error } = await sb.auth.signInWithPassword({ email: e, password: p });
+      if (error) throw error;
+      enterApp(data.user);
+    }
+  } catch(err) {
+    const msg = err.message || '';
+    if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) setErr('E-mail ou senha incorretos.');
+    else if (msg.includes('already registered') || msg.includes('User already registered')) setErr('Este e-mail já está cadastrado. Faça login.');
+    else if (msg.includes('Email not confirmed')) setErr('Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.');
+    else setErr(msg || 'Erro ao autenticar. Tente novamente.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = signup ? 'Criar conta' : 'Entrar';
   }
+}
+
+function enterApp(authUser) {
+  const name = (authUser.user_metadata && authUser.user_metadata.name)
+    ? authUser.user_metadata.name
+    : authUser.email.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  user = { email: authUser.email, name };
   clrErr();
   g('sc-auth').style.display = 'none';
   g('sc-main').style.display = 'flex';
@@ -323,13 +384,18 @@ function doAuth() {
   if (g('drawer-nm')) g('drawer-nm').textContent = n;
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
   loadFavs();
+  loadDailyLimits();
   go('b');
 }
-function logout() {
+
+async function logout() {
+  if (sb) await sb.auth.signOut().catch(() => {});
   user = null; cos = []; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
+  dailyLimits = { vendedores: 0, compradores: 0 };
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
   g('ie').value = ''; g('ip').value = '';
+  if (signup) tgAuth();
   closeDrawer();
 }
 
@@ -363,8 +429,8 @@ function pBuscar(c) {
     <div class="search-panel">
       <h3>🔍 Pesquise aqui</h3>
       <div class="mode-selector">
-        <button class="mode-btn${searchMode==='vendedores'?' active':''}" onclick="setSearchMode('vendedores')">🏪 Lojas &amp; Atacadistas</button>
-        <button class="mode-btn${searchMode==='compradores'?' active':''}" onclick="setSearchMode('compradores')">🚛 Frotistas / Compradores</button>
+        <button class="mode-btn${searchMode==='vendedores'?' active':''}" onclick="setSearchMode('vendedores')">🏪 Lojas &amp; Atacadistas<span class="mode-count${dailyLimits.vendedores>=MAX_DAILY?' mode-count-full':''}">${dailyLimits.vendedores}/${MAX_DAILY}</span></button>
+        <button class="mode-btn${searchMode==='compradores'?' active':''}" onclick="setSearchMode('compradores')">🚛 Frotistas / Compradores<span class="mode-count${dailyLimits.compradores>=MAX_DAILY?' mode-count-full':''}">${dailyLimits.compradores}/${MAX_DAILY}</span></button>
       </div>
       <div class="srow">
         <select id="suf">${opts}</select>
@@ -397,28 +463,42 @@ function setFilter(t) { filterType = t; pBuscar(g('mc')); }
 function setSearchMode(mode) { searchMode = mode; pBuscar(g('mc')); }
 
 // ─── SUPABASE: RATE LIMIT ─────────────────────────────────────
-async function checkRateLimit(searchKey) {
+async function loadDailyLimits() {
+  if (!sb || !user) return;
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const { data } = await sb.from('search_limits')
+      .select('search_key,count').eq('user_email', user.email)
+      .eq('search_date', today).in('search_key', ['vendedores','compradores']);
+    dailyLimits = { vendedores: 0, compradores: 0 };
+    (data || []).forEach(r => { if (r.search_key in dailyLimits) dailyLimits[r.search_key] = r.count; });
+    if (ctab === 'b') render();
+  } catch(e) {}
+}
+async function checkRateLimit(modeKey) {
   if (!sb || !user) return { ok: true, count: 0 };
   const today = new Date().toISOString().split('T')[0];
   try {
     const { data } = await sb.from('search_limits')
       .select('count').eq('user_email', user.email)
-      .eq('search_key', searchKey).eq('search_date', today).maybeSingle();
+      .eq('search_key', modeKey).eq('search_date', today).maybeSingle();
     const count = data ? data.count : 0;
     return { ok: count < MAX_DAILY, count };
   } catch(e) { return { ok: true, count: 0 }; }
 }
-async function incrementRateLimit(searchKey) {
+async function incrementRateLimit(modeKey) {
   if (!sb || !user) return;
   const today = new Date().toISOString().split('T')[0];
   try {
     const { data } = await sb.from('search_limits')
       .select('id,count').eq('user_email', user.email)
-      .eq('search_key', searchKey).eq('search_date', today).maybeSingle();
+      .eq('search_key', modeKey).eq('search_date', today).maybeSingle();
     if (data) {
       await sb.from('search_limits').update({ count: data.count + 1 }).eq('id', data.id);
+      dailyLimits[modeKey] = data.count + 1;
     } else {
-      await sb.from('search_limits').insert({ user_email: user.email, search_key: searchKey, search_date: today, count: 1 });
+      await sb.from('search_limits').insert({ user_email: user.email, search_key: modeKey, search_date: today, count: 1 });
+      dailyLimits[modeKey] = 1;
     }
   } catch(e) { console.warn('Rate limit:', e); }
 }
@@ -554,9 +634,10 @@ async function buscar() {
   const modeLabel  = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
   const displayLoc = cid ? `${cid}, ${uf}` : `${uf} (estado inteiro)`;
 
-  const limit = await checkRateLimit(searchKey);
+  const limit = await checkRateLimit(searchMode);
   if (!limit.ok) {
-    g('res').innerHTML = `<div class="empty"><div class="ei">🚫</div><p style="color:var(--red);font-weight:700">Limite diário atingido</p><small>Você já realizou ${MAX_DAILY} pesquisas para <strong>${displayLoc}</strong> hoje.<br>Tente novamente amanhã ou pesquise outra localidade.</small></div>`;
+    const modeLabel = searchMode === 'compradores' ? '🚛 Frotistas / Compradores' : '🏪 Lojas & Atacadistas';
+    g('res').innerHTML = `<div class="empty"><div class="ei">🚫</div><p style="color:var(--red);font-weight:700">Limite de buscas atingido</p><small>Você atingiu o limite máximo de <strong>${MAX_DAILY} buscas</strong> para <strong>${modeLabel}</strong> hoje.<br>Tente novamente amanhã ou aguarde a atualização do seu plano.</small></div>`;
     return;
   }
 
@@ -608,7 +689,7 @@ async function buscar() {
     if (allResults.length === 0) {
       cos = [];
       hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: 0, mode: searchMode });
-      await incrementRateLimit(searchKey);
+      await incrementRateLimit(searchMode);
       g('res').innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa encontrada em ${displayLoc}.</p><small>Tente outra cidade ou verifique se a Places API está ativada na chave do servidor.</small></div>`;
       g('bbs').disabled = false;
       return;
@@ -619,7 +700,7 @@ async function buscar() {
     currentPage = 0;
 
     setP(95, 'Salvando no banco...');
-    await incrementRateLimit(searchKey);
+    await incrementRateLimit(searchMode);
     await saveToCache(searchKey, uf, cid, cos);
     hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, mode: searchMode });
     setP(100, 'Concluído!');
