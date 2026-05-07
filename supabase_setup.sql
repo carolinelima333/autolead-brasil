@@ -156,3 +156,26 @@ CREATE POLICY searches_own ON searches
   FOR ALL TO authenticated
   USING      (user_email = auth.jwt() ->> 'email')
   WITH CHECK (user_email = auth.jwt() ->> 'email');
+
+-- ──────────────────────────────────────────────────────────────
+-- 5. Histórico permanente de pesquisas (sem UNIQUE — acumula tudo)
+--    Cada busca real na API gera uma linha aqui.
+--    Os resultados ficam salvos para restaurar sem chamar a API.
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS search_history (
+  id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_email   TEXT        NOT NULL,
+  state        TEXT        NOT NULL,
+  city         TEXT,
+  mode         TEXT        NOT NULL DEFAULT 'vendedores',
+  result_count INTEGER     DEFAULT 0,
+  results      JSONB,
+  searched_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE search_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS search_history_own ON search_history;
+CREATE POLICY search_history_own ON search_history
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');

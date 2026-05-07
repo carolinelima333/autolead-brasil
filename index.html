@@ -422,17 +422,16 @@ async function enterApp(authUser) {
 async function autoRestoreLastSearch() {
   if (!sb || !user) return;
   try {
-    const { data } = await sb.from('searches')
-      .select('search_key, results')
+    const { data } = await sb.from('search_history')
+      .select('id, results, mode')
       .eq('user_email', user.email)
-      .not('results', 'is', null)
-      .order('updated_at', { ascending: false })
+      .order('searched_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     if (!data || !data.results || !data.results.length) return;
     cos = data.results;
     cos.forEach((c, i) => c._idx = i);
-    searchMode = data.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
+    searchMode = data.mode || 'vendedores';
     currentPage = 0;
     filterType = 'todos';
   } catch(e) { console.warn('[autoRestore]', e); }
@@ -576,6 +575,24 @@ async function saveToCache(searchKey, uf, city, results) {
   } catch(e) {
     console.error('[cache] saveToCache:', e);
     showToast('Erro ao salvar no banco: ' + (e.message || e), 'red');
+  }
+}
+
+async function saveToHistory(uf, city, mode, results) {
+  if (!sb || !user) return;
+  try {
+    const { error } = await sb.from('search_history').insert({
+      user_email:   user.email,
+      state:        uf,
+      city:         city || null,
+      mode,
+      result_count: results.length,
+      results,
+      searched_at:  new Date().toISOString()
+    });
+    if (error) throw error;
+  } catch(e) {
+    console.error('[history] saveToHistory:', e);
   }
 }
 
@@ -752,6 +769,7 @@ async function buscar() {
     setP(95, 'Salvando no banco...');
     await incrementRateLimit(searchMode);
     await saveToCache(searchKey, uf, cid, cos);
+    await saveToHistory(uf, cid, searchMode, cos);
     hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, mode: searchMode });
     setP(100, 'Concluído!');
     setTimeout(() => exibir(), 300);
@@ -1151,29 +1169,19 @@ function mkFavCard(co) {
 // ─── HISTÓRICO ────────────────────────────────────────────────
 async function pHist(c) {
   c.innerHTML = `
-    <div class="page-header"><h1>Histórico de Pesquisas</h1><p>Clique em <strong>Restaurar</strong> para recarregar sem consumir a API</p></div>
+    <div class="page-header"><h1>Histórico de Pesquisas</h1><p>Clique em <strong>👁 Ver Resultados</strong> para visualizar tudo que a API retornou — sem chamar a API novamente</p></div>
     <div id="hist-content"><div class="ld"><div class="spin"></div><div style="color:var(--txt2)">Carregando...</div></div></div>`;
 
   let supaHist = [];
   if (sb) {
     try {
-      const { data } = await sb.from('searches')
-        .select('search_key, state, city, results, updated_at')
+      const { data } = await sb.from('search_history')
+        .select('id, state, city, mode, result_count, searched_at')
         .eq('user_email', user.email)
-        .order('updated_at', { ascending: false })
-        .limit(200);
+        .order('searched_at', { ascending: false })
+        .limit(300);
       supaHist = data || [];
     } catch(e) { console.warn('Hist load:', e); }
-  }
-
-  const supaKeys = new Set(supaHist.map(h => h.search_key));
-  for (const h of hist.slice().reverse()) {
-    const base = h.cidade ? `${h.uf}_${h.cidade.replace(/\s+/g,'_').toLowerCase()}` : h.uf;
-    const key  = `${base}_${h.mode || 'vendedores'}`;
-    if (!supaKeys.has(key)) {
-      supaHist.unshift({ search_key: key, state: h.uf, city: h.cidade || null,
-        results: null, updated_at: null, _qtd: h.qtd, _data: h.data });
-    }
   }
 
   const el = g('hist-content'); if (!el) return;
@@ -1232,8 +1240,7 @@ function filterHist(stateChanged) {
   let list = window._histData || [];
   if (sf) list = list.filter(h => (h.state||'').toUpperCase() === sf);
   if (cf) list = list.filter(h => h.city === cf);
-  if (mf === 'compradores') list = list.filter(h => h.search_key.endsWith('_compradores'));
-  else if (mf === 'vendedores') list = list.filter(h => !h.search_key.endsWith('_compradores'));
+  if (mf) list = list.filter(h => h.mode === mf);
   renderHistItems(list);
 }
 
@@ -1246,17 +1253,17 @@ function renderHistItems(list) {
   const w = document.createElement('div'); w.className = 'hist-list';
   list.forEach(h => {
     const d = document.createElement('div'); d.className = 'hi';
-    const loc = h.city ? `${h.city} — ${h.state}` : `${h.state} (estado inteiro)`;
-    const qtd = h.results ? h.results.length : (h._qtd ?? '—');
-    const dt  = h.updated_at ? new Date(h.updated_at).toLocaleString('pt-BR') : (h._data || '');
-    const canRestore = h.results && h.results.length > 0;
-    const safeKey   = h.search_key.replace(/'/g, "\\'");
-    const hMode     = h.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
-    const modeBadge = hMode === 'compradores'
+    const loc        = h.city ? `${h.city} — ${h.state}` : `${h.state} (estado inteiro)`;
+    const qtd        = h.result_count ?? '—';
+    const dt         = h.searched_at ? new Date(h.searched_at).toLocaleString('pt-BR') : '';
+    const canRestore = (h.result_count || 0) > 0;
+    const hMode      = h.mode || 'vendedores';
+    const safeId     = h.id;
+    const safeState  = (h.state||'').replace(/'/g,"\\'");
+    const safeCity   = (h.city||'').replace(/'/g,"\\'");
+    const modeBadge  = hMode === 'compradores'
       ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
       : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
-    const safeState = (h.state||'').replace(/'/g,"\\'");
-    const safeCity  = (h.city||'').replace(/'/g,"\\'");
     d.innerHTML = `
       <div style="flex:1;min-width:0">
         <div class="hi-city">${loc}</div>
@@ -1267,9 +1274,9 @@ function renderHistItems(list) {
         <div style="text-align:right"><div class="hi-count">${qtd}</div><div class="hi-lbl">resultados</div></div>
         <div style="display:flex;gap:5px">
           ${canRestore
-            ? `<button class="ab hist-restore" onclick="restoreSearch('${safeKey}')" title="Ver os resultados salvos sem consumir a API">👁 Ver Resultados</button>`
+            ? `<button class="ab hist-restore" onclick="viewHistoryEntry('${safeId}')" title="Ver resultados salvos sem chamar a API">👁 Ver Resultados</button>`
             : `<button class="ab" onclick="rebuscar('${safeState}','${safeCity}','${hMode}')" style="font-size:12px" title="Refazer esta busca na API">🔄 Pesquisar</button>`}
-          ${h.updated_at ? `<button class="ab hist-del" onclick="deleteHistory('${safeKey}')">🗑</button>` : ''}
+          <button class="ab hist-del" onclick="deleteHistoryEntry('${safeId}')">🗑</button>
         </div>
       </div>`;
     w.appendChild(d);
@@ -1282,7 +1289,7 @@ async function clearHistAll() {
   if (!confirm('Limpar TODO o histórico de pesquisas? Esta ação não pode ser desfeita.')) return;
   if (!sb) return;
   try {
-    const { error } = await sb.from('searches').delete().eq('user_email', user.email);
+    const { error } = await sb.from('search_history').delete().eq('user_email', user.email);
     if (error) throw error;
     hist = [];
     window._histData = [];
@@ -1291,21 +1298,31 @@ async function clearHistAll() {
   } catch(e) { showToast('Erro ao limpar: ' + (e.message || e), 'red'); }
 }
 
-async function restoreSearch(searchKey) {
-  const cached = await checkCache(searchKey);
-  if (!cached || !cached.length) {
-    showToast('Cache expirado — pesquise novamente para atualizar', 'red');
-    return;
+async function viewHistoryEntry(id) {
+  if (!sb || !user) return;
+  showToast('Carregando resultados...');
+  try {
+    const { data, error } = await sb.from('search_history')
+      .select('results, mode, state, city')
+      .eq('id', id)
+      .eq('user_email', user.email)
+      .single();
+    if (error || !data || !data.results || !data.results.length) {
+      showToast('Resultados não encontrados no banco.', 'red');
+      return;
+    }
+    cos = data.results;
+    cos.forEach((c, i) => c._idx = i);
+    searchMode = data.mode || 'vendedores';
+    currentPage = 0;
+    filterType = 'todos';
+    const loc = data.city ? `${data.city} — ${data.state}` : data.state;
+    showToast(`${cos.length} empresa${cos.length !== 1 ? 's' : ''} carregada${cos.length !== 1 ? 's' : ''} — ${loc}`);
+    go('b');
+  } catch(e) {
+    showToast('Erro ao carregar resultados.', 'red');
+    console.error('[history] viewHistoryEntry:', e);
   }
-  if (searchKey.endsWith('_compradores')) searchMode = 'compradores';
-  else if (searchKey.endsWith('_vendedores')) searchMode = 'vendedores';
-  cos = cached;
-  cos.forEach((c, i) => c._idx = i);
-  currentPage = 0;
-  filterType = 'todos';
-  const modeLabel = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
-  showToast(`${cos.length} empresas restauradas · ${modeLabel}`);
-  go('b');
 }
 
 function rebuscar(state, city, mode) {
@@ -1320,17 +1337,14 @@ function rebuscar(state, city, mode) {
   }, 150);
 }
 
-async function deleteHistory(searchKey) {
-  if (!confirm('Excluir este histórico de pesquisa?')) return;
+async function deleteHistoryEntry(id) {
+  if (!confirm('Excluir este registro do histórico?')) return;
   if (!sb) { showToast('Supabase não conectado', 'red'); return; }
   try {
-    const { error } = await sb.from('searches').delete().eq('user_email', user.email).eq('search_key', searchKey);
+    const { error } = await sb.from('search_history').delete()
+      .eq('id', id).eq('user_email', user.email);
     if (error) throw error;
-    hist = hist.filter(h => {
-      const k = h.cidade ? `${h.uf}_${h.cidade.replace(/\s+/g,'_').toLowerCase()}` : h.uf;
-      return k !== searchKey;
-    });
-    showToast('Histórico excluído.');
+    showToast('Registro excluído.');
     pHist(g('mc'));
   } catch(e) {
     showToast('Erro ao excluir: ' + (e.message || e), 'red');
