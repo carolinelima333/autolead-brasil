@@ -1,5 +1,7 @@
 {
-  "outputDirectory": "frontend",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build && cp -r frontend/js dist/js",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index.py" }
   ]
