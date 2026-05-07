@@ -1,6 +1,6 @@
 // ─── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
-const SUPA_KEY = 'sb_publishable_uH_lieeSpbZHADvMAcDAwA_uqppix7p';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iaWdmcmRlemtvenp3cW96dmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDk2NjAsImV4cCI6MjA5MzQ4NTY2MH0.LWKWOvpIjkdd1w8aoAvixfNrpa1TuoX3B0mZ90_gXhM';
 // Termos de busca por modo
 const TERMS_VENDEDORES  = ['distribuidora de pneus','atacadista de pneus','loja de pneus','revenda de pneus','pneus truck center'];
 const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviario','logistica transporte cargas'];
