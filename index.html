@@ -182,7 +182,7 @@
 <div id="modal-store" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeStoreModal()">
   <div class="modal-box">
     <div class="modal-head">
-      <h3>📋 Registrar Loja</h3>
+      <h3 id="modal-head-title">📋 Registrar Loja</h3>
       <button class="modal-close" onclick="closeStoreModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -195,8 +195,9 @@
         <label>Status</label>
         <select id="st-status">
           <option value="contato">Em contato</option>
-          <option value="cliente">Já é cliente</option>
-          <option value="retorno">Possível retorno</option>
+          <option value="retorno">Retornar depois</option>
+          <option value="sem_interesse">Sem interesse no momento</option>
+          <option value="concluido">Concluído</option>
         </select>
       </div>
       <div class="fl">
@@ -232,6 +233,7 @@
 
 </div><!-- #app -->
 
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────
@@ -255,9 +257,19 @@ let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'to
 let searchMode = 'vendedores';
 let theme = localStorage.getItem('al_theme') || 'dark';
 let currentStoreIdx = undefined;
+let currentStoreId = null;
 let currentPage = 0;
 const PAGE_SIZE = 30;
 let dailyLimits = { vendedores: 0, compradores: 0 };
+let storeFilter = 'todos';
+let favSearch = '';
+
+const STATUS_MAP = {
+  contato:       { label: 'Em contato',          cls: 'badge-blue' },
+  retorno:       { label: 'Retornar depois',      cls: 'badge-yel'  },
+  sem_interesse: { label: 'Sem interesse',        cls: 'badge-bad'  },
+  concluido:     { label: 'Concluído',            cls: 'badge-ok'   },
+};
 
 // ─── HELPERS ──────────────────────────────────────────────────
 const g = id => document.getElementById(id);
@@ -1063,14 +1075,28 @@ async function fetchCNPJ(raw) {
 function pFavs(c) {
   const map = new Map(favData);
   cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
-  const fs = Array.from(map.values());
+  let fs = Array.from(map.values());
 
-  c.innerHTML = `<div class="page-header"><h1>Favoritos</h1><p>${fs.length} empresa${fs.length!==1?'s':''} salva${fs.length!==1?'s':''} — persistido no banco</p></div>`;
-  if (!fs.length) { c.innerHTML += `<div class="empty"><div class="ei">⭐</div><p>Nenhum favorito ainda.</p><small>Favorite empresas na aba de busca.</small></div>`; return; }
+  c.innerHTML = `
+    <div class="page-header"><h1>Favoritos</h1><p>${map.size} empresa${map.size!==1?'s':''} salva${map.size!==1?'s':''} — persistido no banco</p></div>
+    <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
+      <div class="srow">
+        <input id="fav-srch" placeholder="Filtrar por nome, tipo ou endereço..." value="${favSearch.replace(/"/g,'&quot;')}" oninput="setFavSearch(this.value)" autocomplete="off"/>
+      </div>
+    </div>`;
+
+  const q = favSearch.toLowerCase().trim();
+  if (q) fs = fs.filter(x => (x.nome||'').toLowerCase().includes(q) || (x.endereco||'').toLowerCase().includes(q) || (x.tipo||'').toLowerCase().includes(q));
+
+  if (!fs.length) {
+    c.innerHTML += `<div class="empty"><div class="ei">${favSearch?'🔍':'⭐'}</div><p>${favSearch?'Nenhum favorito encontrado.':'Nenhum favorito ainda.'}</p><small>${favSearch?'Tente outro termo de busca.':'Favorite empresas na aba de busca.'}</small></div>`;
+    return;
+  }
   const gr = document.createElement('div'); gr.className = 'grid';
   fs.forEach(co => gr.appendChild(mkFavCard(co)));
   c.appendChild(gr);
 }
+function setFavSearch(v) { favSearch = v; pFavs(g('mc')); }
 
 function mkFavCard(co) {
   const d = document.createElement('div'); d.className = 'cc';
@@ -1113,8 +1139,9 @@ async function pHist(c) {
     try {
       const { data } = await sb.from('searches')
         .select('search_key, state, city, results, updated_at')
+        .eq('user_email', user.email)
         .order('updated_at', { ascending: false })
-        .limit(100);
+        .limit(200);
       supaHist = data || [];
     } catch(e) { console.warn('Hist load:', e); }
   }
@@ -1135,17 +1162,54 @@ async function pHist(c) {
     return;
   }
 
+  window._histData = supaHist;
+
+  const states = [...new Set(supaHist.map(h => h.state).filter(Boolean))].sort();
+  const stateOpts = '<option value="">Todos os estados</option>' + states.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  el.innerHTML = `
+    <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
+      <div class="srow">
+        <select id="hist-state-f" onchange="filterHist()" style="max-width:180px">
+          ${stateOpts}
+        </select>
+        <select id="hist-mode-f" onchange="filterHist()" style="max-width:220px">
+          <option value="">Todos os tipos</option>
+          <option value="vendedores">🏪 Lojas & Atacadistas</option>
+          <option value="compradores">🚛 Frotistas</option>
+        </select>
+        <button class="ab" onclick="clearHistAll()" style="color:var(--red);border-color:rgba(239,68,68,.3);margin-left:auto;white-space:nowrap">🗑 Limpar tudo</button>
+      </div>
+    </div>
+    <div id="hist-items"></div>`;
+  renderHistItems(supaHist);
+}
+
+function filterHist() {
+  const sf = (g('hist-state-f')?.value || '').toUpperCase();
+  const mf = g('hist-mode-f')?.value || '';
+  let list = window._histData || [];
+  if (sf) list = list.filter(h => (h.state||'').toUpperCase() === sf);
+  if (mf === 'compradores') list = list.filter(h => h.search_key.endsWith('_compradores'));
+  else if (mf === 'vendedores') list = list.filter(h => !h.search_key.endsWith('_compradores'));
+  renderHistItems(list);
+}
+
+function renderHistItems(list) {
+  const el = g('hist-items'); if (!el) return;
+  if (!list.length) {
+    el.innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma busca encontrada com este filtro.</p></div>`;
+    return;
+  }
   const w = document.createElement('div'); w.className = 'hist-list';
-  supaHist.forEach(h => {
+  list.forEach(h => {
     const d = document.createElement('div'); d.className = 'hi';
     const loc = h.city ? `${h.city} — ${h.state}` : `${h.state} (estado inteiro)`;
-    const qtd  = h.results ? h.results.length : (h._qtd ?? '—');
-    const dt   = h.updated_at
-      ? new Date(h.updated_at).toLocaleString('pt-BR')
-      : (h._data || '');
+    const qtd = h.results ? h.results.length : (h._qtd ?? '—');
+    const dt  = h.updated_at ? new Date(h.updated_at).toLocaleString('pt-BR') : (h._data || '');
     const canRestore = h.results && h.results.length > 0;
-    const safeKey  = h.search_key.replace(/'/g, "\\'");
-    const hMode    = h.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
+    const safeKey   = h.search_key.replace(/'/g, "\\'");
+    const hMode     = h.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
     const modeBadge = hMode === 'compradores'
       ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
       : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
@@ -1166,6 +1230,19 @@ async function pHist(c) {
   });
   el.innerHTML = '';
   el.appendChild(w);
+}
+
+async function clearHistAll() {
+  if (!confirm('Limpar TODO o histórico de pesquisas? Esta ação não pode ser desfeita.')) return;
+  if (!sb) return;
+  try {
+    const { error } = await sb.from('searches').delete().eq('user_email', user.email);
+    if (error) throw error;
+    hist = [];
+    window._histData = [];
+    showToast('Histórico limpo.');
+    pHist(g('mc'));
+  } catch(e) { showToast('Erro ao limpar: ' + (e.message || e), 'red'); }
 }
 
 async function restoreSearch(searchKey) {
@@ -1189,7 +1266,7 @@ async function deleteHistory(searchKey) {
   if (!confirm('Excluir este histórico de pesquisa?')) return;
   if (!sb) { showToast('Supabase não conectado', 'red'); return; }
   try {
-    const { error } = await sb.from('searches').delete().eq('search_key', searchKey);
+    const { error } = await sb.from('searches').delete().eq('user_email', user.email).eq('search_key', searchKey);
     if (error) throw error;
     hist = hist.filter(h => {
       const k = h.cidade ? `${h.uf}_${h.cidade.replace(/\s+/g,'_').toLowerCase()}` : h.uf;
@@ -1205,31 +1282,133 @@ async function deleteHistory(searchKey) {
 // ─── EXPORTAR ─────────────────────────────────────────────────
 function pExp(c) {
   const ca = cos.filter(x=>x.abertura).length;
+  const mk = (modo, lbl, n, dis) => `
+    <div class="export-card">
+      <h3>${lbl}</h3>
+      <p>${{todas:'Nome, tipo, telefone, endereço, avaliação e data de abertura.',favs:'Apenas as empresas marcadas como favorita para prospecção prioritária.',abertura:'Empresas com data de abertura identificada via CNPJ.'}[modo]}</p>
+      <div class="export-btns">
+        <button class="bex bex-csv" onclick="expCSV('${modo}')" ${dis?'disabled':''}>⬇ CSV (${n})</button>
+        <button class="bex bex-xls" onclick="expExcel('${modo}')" ${dis?'disabled':''}>📗 Excel</button>
+        <button class="bex bex-pdf" onclick="expPDF('${modo}')" ${dis?'disabled':''}>📄 PDF</button>
+      </div>
+    </div>`;
   c.innerHTML = `
-    <div class="page-header"><h1>Exportar Dados</h1><p>Baixe seus leads em CSV para qualquer CRM ou planilha.</p></div>
+    <div class="page-header"><h1>Exportar Relatórios</h1><p>Exporte seus leads em CSV, Excel ou PDF profissional.</p></div>
     <div class="stats-bar">
-      <div class="stat"><div class="num">${cos.length}</div><div class="lbl">Total</div></div>
+      <div class="stat"><div class="num">${cos.length}</div><div class="lbl">Empresas</div></div>
       <div class="stat"><div class="num">${favs.size}</div><div class="lbl">Favoritas</div></div>
       <div class="stat"><div class="num">${ca}</div><div class="lbl">c/ Abertura</div></div>
       <div class="stat"><div class="num">${hist.length}</div><div class="lbl">Buscas</div></div>
     </div>
     <div class="export-wrap">
-      <div class="export-card"><h3>📊 Exportar todas as empresas</h3><p>Nome, tipo, telefone, endereço, cidade, estado, avaliação e data de abertura.</p><button class="bex" onclick="expCSV('todas')" ${!cos.length?'disabled':''}>⬇ CSV Completo (${cos.length})</button></div>
-      <div class="export-card"><h3>⭐ Exportar favoritas</h3><p>Apenas as empresas marcadas como favorita para prospecção prioritária.</p><button class="bex" onclick="expCSV('favs')" ${!favs.size?'disabled':''}>⬇ CSV Favoritas (${favs.size})</button></div>
-      <div class="export-card"><h3>📅 Exportar com data de abertura</h3><p>Empresas com data identificada via CNPJ — segmente por tempo de mercado.</p><button class="bex" onclick="expCSV('abertura')" ${!ca?'disabled':''}>⬇ CSV c/ Abertura (${ca})</button></div>
+      ${mk('todas','📊 Todas as empresas',cos.length,!cos.length)}
+      ${mk('favs','⭐ Empresas favoritas',favs.size,!favs.size)}
+      ${mk('abertura','📅 Com data de abertura',ca,!ca)}
     </div>`;
 }
+
+function _getExportList(modo) {
+  if (modo === 'favs') {
+    const map = new Map(favData);
+    cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
+    return Array.from(map.values());
+  }
+  if (modo === 'abertura') return cos.filter(x => x.abertura);
+  return cos;
+}
+
 function expCSV(modo) {
-  let lista = cos;
-  if (modo==='favs') lista = cos.filter(x=>favs.has(x.id));
-  else if (modo==='abertura') lista = cos.filter(x=>x.abertura);
+  const lista = _getExportList(modo);
   if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
-  const h = 'Nome,Tipo,Telefone,Endereço,Cidade,Estado,Avaliação,Data de Abertura,Tempo de Atividade\n';
-  const rows = lista.map(c=>`"${c.nome}","${c.tipo}","${c.telefone}","${c.endereco}","${c.cidade}","${c.uf}","${c.avaliacao}","${c.abertura?fmtData(c.abertura):''}","${c.abertura?calcIdade(c.abertura):''}"`).join('\n');
+  const h = 'Nome,Tipo,Telefone,Endereço,Cidade,Estado,Avaliação,Data de Abertura,Tempo de Atividade,CNPJ,Porte\n';
+  const rows = lista.map(c=>`"${(c.nome||'').replace(/"/g,'""')}","${c.tipo||''}","${c.telefone||''}","${(c.endereco||'').replace(/"/g,'""')}","${c.cidade||''}","${c.uf||''}","${c.avaliacao||''}","${c.abertura?fmtData(c.abertura):''}","${c.abertura?calcIdade(c.abertura):''}","${c.cnpj||''}","${c.porte||''}"`).join('\n');
   const b = new Blob(['﻿'+h+rows],{type:'text/csv;charset=utf-8;'});
   const u = URL.createObjectURL(b); const a = document.createElement('a');
   a.href=u; a.download=`autolead_${modo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
   a.click(); URL.revokeObjectURL(u);
+}
+
+function expExcel(modo) {
+  if (typeof XLSX === 'undefined') { alert('Biblioteca Excel não carregada. Verifique sua conexão.'); return; }
+  const lista = _getExportList(modo);
+  if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
+  const rows = lista.map(c => ({
+    'Nome':               c.nome||'',
+    'Tipo':               c.tipo||'',
+    'Telefone':           c.telefone||'',
+    'Endereço':           c.endereco||'',
+    'Cidade':             c.cidade||'',
+    'Estado':             c.uf||'',
+    'Avaliação':          c.avaliacao||'',
+    'Data de Abertura':   c.abertura ? fmtData(c.abertura) : '',
+    'Tempo de Atividade': c.abertura ? calcIdade(c.abertura) : '',
+    'CNPJ':               c.cnpj||'',
+    'Porte':              c.porte||'',
+    'CNAE':               c.cnae||'',
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [30,22,18,40,18,7,10,18,22,18,15,40].map(w => ({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads AutoLead');
+  XLSX.writeFile(wb, `autolead_${modo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+}
+
+function expPDF(modo) {
+  const lista = _getExportList(modo);
+  if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
+  const modeLabel = {todas:'Todas as Empresas',favs:'Empresas Favoritas',abertura:'Empresas com Data de Abertura'}[modo]||modo;
+  const date = new Date().toLocaleDateString('pt-BR');
+  const rows = lista.map((c,i) => `
+    <tr class="${i%2?'alt':''}">
+      <td>${i+1}</td>
+      <td><strong>${c.nome||'—'}</strong></td>
+      <td>${c.tipo||'—'}</td>
+      <td>${c.telefone||'—'}</td>
+      <td style="font-size:9px">${c.endereco||'—'}</td>
+      <td>${c.uf||'—'}</td>
+      <td>${c.avaliacao||'—'}</td>
+      <td>${c.abertura?fmtData(c.abertura):'—'}</td>
+      <td>${c.cnpj||'—'}</td>
+    </tr>`).join('');
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>AutoLead Brasil — ${modeLabel}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px}
+      .hdr{border-bottom:3px solid #1e3a5f;padding-bottom:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end}
+      .hdr h1{font-size:20px;color:#1e3a5f;font-weight:900}
+      .hdr .sub{font-size:11px;color:#555}
+      .meta{margin-bottom:12px;font-size:11px;color:#555;display:flex;gap:20px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1e3a5f;color:#fff;padding:7px 5px;text-align:left;font-size:10px;font-weight:700}
+      td{padding:5px 5px;border-bottom:1px solid #e5e7eb;font-size:10px;vertical-align:top}
+      tr.alt td{background:#f9fafb}
+      .ftr{margin-top:16px;border-top:1px solid #e5e7eb;padding-top:8px;font-size:9px;color:#999;text-align:center}
+      .print-btn{margin-top:18px;text-align:center}
+      @media print{.print-btn{display:none}}
+    </style>
+  </head><body>
+    <div class="hdr">
+      <div><h1>AutoLead Brasil</h1><div class="sub">Prospecção Automotiva Profissional</div></div>
+      <div style="text-align:right"><strong>${modeLabel}</strong><br><span class="sub">${date}</span></div>
+    </div>
+    <div class="meta">
+      <span>📊 ${lista.length} registro${lista.length!==1?'s':''}</span>
+      <span>📅 Gerado em ${date}</span>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>Endereço</th><th>UF</th><th>Aval.</th><th>Abertura</th><th>CNPJ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="ftr">AutoLead Brasil · ${lista.length} registros · ${date}</div>
+    <div class="print-btn">
+      <button onclick="window.print()" style="padding:10px 28px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700">🖨 Imprimir / Salvar PDF</button>
+    </div>
+  </body></html>`;
+  const w = window.open('','_blank');
+  if (!w) { alert('Permita popups neste site para gerar o PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
 }
 
 // ─── LOJAS REGISTRADAS ────────────────────────────────────────
@@ -1238,25 +1417,44 @@ async function pStores(c) {
     <div class="page-header"><h1>Lojas Registradas</h1><p>Gerencie o relacionamento com cada estabelecimento.</p></div>
     <div style="margin-bottom:1.2rem"><button class="bsc" style="width:auto;padding:11px 20px" onclick="openStoreModal()">+ Nova Loja</button></div>
     <div id="stores-list"><div class="ld"><div class="spin"></div><div style="color:var(--txt2)">Carregando...</div></div></div>`;
+
   const lista = await loadStores();
+  window._storesList = lista;
   const el = g('stores-list'); if (!el) return;
+
   if (!lista.length) {
     el.innerHTML = `<div class="empty"><div class="ei">🏪</div><p>Nenhuma loja registrada ainda.</p><small>Clique em "📋 Registrar" em um card de empresa ou em "+ Nova Loja" acima.</small></div>`;
     return;
   }
+
+  const counts = { todos: lista.length };
+  Object.keys(STATUS_MAP).forEach(k => { counts[k] = lista.filter(s => s.status === k).length; });
+
+  const tabDefs = [
+    ['todos', 'Todos', counts.todos, ''],
+    ['contato', 'Em contato', counts.contato, 'var(--blue)'],
+    ['retorno', 'Retornar depois', counts.retorno, 'var(--yel)'],
+    ['sem_interesse', 'Sem interesse', counts.sem_interesse, 'var(--red)'],
+    ['concluido', 'Concluído', counts.concluido, 'var(--green)'],
+  ];
+  const tabs = `<div class="status-tabs">${tabDefs.map(([k,lbl,cnt,col]) =>
+    `<button class="status-tab-btn${storeFilter===k?' active':''}" onclick="setStoreFilter('${k}')"
+      style="${storeFilter===k&&col?'border-color:'+col+';color:'+col+';background:'+col.replace(')',',0.08)').replace('var(','rgba('):''}">${lbl}<span class="status-tab-count">${cnt}</span></button>`
+  ).join('')}</div>`;
+
+  let filtered = lista;
+  if (storeFilter !== 'todos') filtered = lista.filter(s => s.status === storeFilter);
+
   const w = document.createElement('div'); w.className = 'stores-grid';
-  lista.forEach(s => {
+  filtered.forEach(s => {
     const d = document.createElement('div'); d.className = 'store-card';
-    const statusMap = { contato:'Em contato', cliente:'Já é cliente', retorno:'Possível retorno' };
-    const classMap = { contato:'badge-blue', cliente:'badge-ok', retorno:'badge-yel' };
-    const sLabel = statusMap[s.status] || s.status;
-    const sClass = classMap[s.status] || 'badge-yel';
+    const sm = STATUS_MAP[s.status] || { label: s.status||'—', cls: 'badge-yel' };
     const safeNome = (s.company_name||'').replace(/'/g,"\\'");
-    const safeTel = (s.phone||'').replace(/'/g,"\\'");
+    const safeTel  = (s.phone||'').replace(/'/g,"\\'");
     d.innerHTML = `
       <div class="store-card-top">
         <div class="store-name">${s.company_name}</div>
-        <span class="${sClass}">${sLabel}</span>
+        <span class="${sm.cls}">${sm.label}</span>
       </div>
       ${s.phone?`<div class="store-info">📞 ${s.phone}</div>`:''}
       ${(s.city||s.state)?`<div class="store-info">📍 ${[s.city,s.state].filter(Boolean).join(', ')}</div>`:''}
@@ -1264,11 +1462,36 @@ async function pStores(c) {
       <div class="store-meta">Registrado em ${new Date(s.created_at).toLocaleDateString('pt-BR')}</div>
       <div class="cacts" style="margin-top:.7rem">
         ${s.phone?`<button class="ab wpp" onclick="wpp('${safeTel}','${safeNome}')">💬 WhatsApp</button>`:''}
+        <button class="ab" onclick="editStoreById('${s.id}')">✏ Editar</button>
         <button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deleteStore('${s.id}')">🗑 Remover</button>
       </div>`;
     w.appendChild(d);
   });
-  el.appendChild(w);
+
+  if (!filtered.length) {
+    el.innerHTML = tabs + `<div class="empty"><div class="ei">🔍</div><p>Nenhuma loja com este status.</p></div>`;
+  } else {
+    el.innerHTML = tabs;
+    el.appendChild(w);
+  }
+}
+
+function setStoreFilter(f) { storeFilter = f; go('s'); }
+
+function editStoreById(id) {
+  const s = (window._storesList||[]).find(x => x.id === id);
+  if (!s) return;
+  currentStoreId = id;
+  currentStoreIdx = undefined;
+  const fields = {
+    'st-nome': s.company_name||'', 'st-tel': s.phone||'', 'st-end': s.address||'',
+    'st-cid': s.city||'', 'st-uf': s.state||'', 'st-obs': s.notes||'', 'st-coid': s.company_id||''
+  };
+  Object.entries(fields).forEach(([fid, val]) => { const el = g(fid); if (el) el.value = val; });
+  if (g('st-status')) g('st-status').value = s.status || 'contato';
+  const h = g('modal-head-title'); if (h) h.textContent = '✏ Editar Loja';
+  const err = g('st-err'); if (err) err.style.display = 'none';
+  const modal = g('modal-store'); if (modal) modal.style.display = 'flex';
 }
 async function loadStores() {
   if (!sb || !user) return [];
@@ -1283,6 +1506,7 @@ async function loadStores() {
 }
 function openStoreModal(idx) {
   currentStoreIdx = idx;
+  currentStoreId = null;
   const co = idx !== undefined ? cos[idx] : null;
   ['st-nome','st-tel','st-end','st-cid','st-uf','st-obs','st-coid'].forEach(id => { const el=g(id); if(el) el.value=''; });
   if (g('st-status')) g('st-status').value = 'contato';
@@ -1294,12 +1518,15 @@ function openStoreModal(idx) {
     if (g('st-uf')) g('st-uf').value = co.uf||'';
     if (g('st-coid')) g('st-coid').value = co.id||'';
   }
+  const h = g('modal-head-title'); if (h) h.textContent = '📋 Registrar Loja';
   const modal = g('modal-store'); if (modal) modal.style.display = 'flex';
   const err = g('st-err'); if (err) err.style.display = 'none';
 }
 function closeStoreModal() {
   const modal = g('modal-store'); if (modal) modal.style.display = 'none';
   currentStoreIdx = undefined;
+  currentStoreId = null;
+  const h = g('modal-head-title'); if (h) h.textContent = '📋 Registrar Loja';
 }
 async function submitStore() {
   const nome = (g('st-nome').value||'').trim();
@@ -1320,16 +1547,22 @@ async function submitStore() {
   try {
     if (!sb) throw new Error('Supabase não conectado — verifique a configuração.');
     if (!user) throw new Error('Faça login para salvar registros.');
-    const { error } = await sb.from('stores').insert(storeData);
+    let error;
+    if (currentStoreId) {
+      ({ error } = await sb.from('stores').update(storeData).eq('id', currentStoreId));
+    } else {
+      ({ error } = await sb.from('stores').insert(storeData));
+    }
     if (error) throw new Error(error.message || JSON.stringify(error));
+    const msg = currentStoreId ? 'Loja atualizada com sucesso!' : 'Loja registrada com sucesso!';
     closeStoreModal();
-    showToast('Loja registrada com sucesso!');
+    showToast(msg);
     if (ctab === 's') go('s');
   } catch(e) {
     console.error('[stores] submitStore:', e);
     const err = g('st-err'); if (err){ err.textContent='Erro: '+(e.message||'Tente novamente.'); err.style.display='block'; }
   }
-  if (btn) { btn.disabled=false; btn.textContent='Salvar Loja'; }
+  if (btn) { btn.disabled=false; btn.textContent='Salvar'; }
 }
 async function deleteStore(id) {
   if (!confirm('Remover esta loja do registro?')) return;
