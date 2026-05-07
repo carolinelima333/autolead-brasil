@@ -21,9 +21,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Pasta do frontend — resolve corretamente rodando local ou no Vercel
+# Raiz do projeto — index.html, css/ e js/ ficam aqui (local e Vercel)
 _BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIR = os.path.join(_BASE_DIR, 'frontend')
+FRONTEND_DIR = _BASE_DIR
 
 app = Flask(__name__, static_folder=FRONTEND_DIR)
 CORS(app)
