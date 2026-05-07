@@ -6,11 +6,13 @@
 -- 1. Histórico / cache de pesquisas (state + city + resultados JSON)
 CREATE TABLE IF NOT EXISTS searches (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  search_key  TEXT        UNIQUE NOT NULL,
+  user_email  TEXT        NOT NULL,
+  search_key  TEXT        NOT NULL,
   state       TEXT        NOT NULL,
   city        TEXT,
   results     JSONB,
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_email, search_key)
 );
 
 -- 2. Lojas registradas (CRM)
@@ -49,12 +51,47 @@ CREATE TABLE IF NOT EXISTS search_limits (
 );
 
 -- ──────────────────────────────────────────────────────────────
--- DESABILITAR RLS em todas as tabelas
+-- ROW LEVEL SECURITY (RLS)
 -- ──────────────────────────────────────────────────────────────
-ALTER TABLE searches      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stores        DISABLE ROW LEVEL SECURITY;
-ALTER TABLE favorites     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE search_limits DISABLE ROW LEVEL SECURITY;
+ALTER TABLE searches      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stores        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE favorites     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_limits ENABLE ROW LEVEL SECURITY;
+
+-- searches: cada usuário vê apenas o seu próprio histórico
+DROP POLICY IF EXISTS searches_select ON searches;
+DROP POLICY IF EXISTS searches_insert ON searches;
+DROP POLICY IF EXISTS searches_update ON searches;
+DROP POLICY IF EXISTS searches_delete ON searches;
+
+CREATE POLICY searches_own ON searches
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');
+
+-- stores: cada usuário acessa apenas os seus próprios registros
+DROP POLICY IF EXISTS stores_own ON stores;
+
+CREATE POLICY stores_own ON stores
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');
+
+-- favorites: cada usuário acessa apenas os seus próprios favoritos
+DROP POLICY IF EXISTS favorites_own ON favorites;
+
+CREATE POLICY favorites_own ON favorites
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');
+
+-- search_limits: cada usuário acessa apenas o seu próprio contador
+DROP POLICY IF EXISTS search_limits_own ON search_limits;
+
+CREATE POLICY search_limits_own ON search_limits
+  FOR ALL TO authenticated
+  USING      (user_email = auth.jwt() ->> 'email')
+  WITH CHECK (user_email = auth.jwt() ->> 'email');
 
 -- ──────────────────────────────────────────────────────────────
 -- AUTO-CONFIRMAR E-MAIL NO CADASTRO (sem envio de confirmação)

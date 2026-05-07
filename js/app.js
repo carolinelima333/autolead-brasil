@@ -199,7 +199,7 @@ async function checkCache(searchKey) {
   if (!sb) return null;
   try {
     const { data, error } = await sb.from('searches')
-      .select('results,updated_at').eq('search_key', searchKey).maybeSingle();
+      .select('results,updated_at').eq('user_email', user.email).eq('search_key', searchKey).maybeSingle();
     if (error) { console.warn('[cache] leitura:', error.message); return null; }
     if (!data || !data.results) return null;
     const ageDays = (Date.now() - new Date(data.updated_at).getTime()) / 86400000;
@@ -210,8 +210,8 @@ async function saveToCache(searchKey, uf, city, results) {
   if (!sb) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
   try {
     const { error } = await sb.from('searches').upsert(
-      { search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
-      { onConflict: 'search_key' }
+      { user_email: user.email, search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
+      { onConflict: 'user_email,search_key' }
     );
     if (error) throw error;
   } catch(e) {
@@ -802,6 +802,7 @@ async function pHist(c) {
     try {
       const { data } = await sb.from('searches')
         .select('search_key, state, city, results, updated_at')
+        .eq('user_email', user.email)
         .order('updated_at', { ascending: false })
         .limit(100);
       supaHist = data || [];
@@ -880,7 +881,7 @@ async function deleteHistory(searchKey) {
   if (!confirm('Excluir este histórico de pesquisa?')) return;
   if (!sb) { showToast('Supabase não conectado', 'red'); return; }
   try {
-    const { error } = await sb.from('searches').delete().eq('search_key', searchKey);
+    const { error } = await sb.from('searches').delete().eq('user_email', user.email).eq('search_key', searchKey);
     if (error) throw error;
     // Remove da lista em memória também
     hist = hist.filter(h => {
