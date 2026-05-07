@@ -342,17 +342,33 @@ async function doAuth() {
       const pwErrs = validatePassword(p);
       if (pwErrs.length > 0) { setErr('A senha deve conter: ' + pwErrs.join(', ') + '.'); return; }
       // Cria usuário via backend (sem e-mail de confirmação)
-      const reg = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: e, password: p, name: n }),
-      });
-      const regData = await reg.json();
-      if (!regData.ok) throw new Error(regData.error || 'Erro ao criar conta');
-      // Faz login imediatamente com a conta recém-criada
-      const { data: sd, error: se } = await sb.auth.signInWithPassword({ email: e, password: p });
-      if (se) throw se;
-      enterApp(sd.user);
+      let regOk = false;
+      try {
+        const reg = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: e, password: p, name: n }),
+        });
+        const regData = await reg.json();
+        if (!regData.ok) throw new Error(regData.error || 'Erro ao criar conta');
+        regOk = true;
+      } catch(regErr) {
+        // Backend indisponível ou chave não configurada — tenta signUp direto
+        const { data: suData, error: suErr } = await sb.auth.signUp({
+          email: e, password: p, options: { data: { name: n } }
+        });
+        if (suErr) throw suErr;
+        if (suData.session) { enterApp(suData.user); return; }
+        if (suData.user && !suData.session) {
+          throw new Error('Confirme seu e-mail para ativar o acesso, ou desative a confirmação de e-mail no Supabase Dashboard → Authentication → Configuration.');
+        }
+      }
+      if (regOk) {
+        // Login imediato com a conta criada e já confirmada pelo backend
+        const { data: sd, error: se } = await sb.auth.signInWithPassword({ email: e, password: p });
+        if (se) throw se;
+        enterApp(sd.user);
+      }
     } else {
       btn.textContent = 'Entrando...';
       const { data, error } = await sb.auth.signInWithPassword({ email: e, password: p });
