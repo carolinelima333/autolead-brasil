@@ -399,7 +399,7 @@ async function doAuth() {
   }
 }
 
-function enterApp(authUser) {
+async function enterApp(authUser) {
   const name = (authUser.user_metadata && authUser.user_metadata.name)
     ? authUser.user_metadata.name
     : authUser.email.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -415,7 +415,27 @@ function enterApp(authUser) {
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
   loadFavs();
   loadDailyLimits();
+  await autoRestoreLastSearch();
   go('b');
+}
+
+async function autoRestoreLastSearch() {
+  if (!sb || !user) return;
+  try {
+    const { data } = await sb.from('searches')
+      .select('search_key, results')
+      .eq('user_email', user.email)
+      .not('results', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data || !data.results || !data.results.length) return;
+    cos = data.results;
+    cos.forEach((c, i) => c._idx = i);
+    searchMode = data.search_key.endsWith('_compradores') ? 'compradores' : 'vendedores';
+    currentPage = 0;
+    filterType = 'todos';
+  } catch(e) { console.warn('[autoRestore]', e); }
 }
 
 async function logout() {
@@ -1235,6 +1255,8 @@ function renderHistItems(list) {
     const modeBadge = hMode === 'compradores'
       ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
       : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
+    const safeState = (h.state||'').replace(/'/g,"\\'");
+    const safeCity  = (h.city||'').replace(/'/g,"\\'");
     d.innerHTML = `
       <div style="flex:1;min-width:0">
         <div class="hi-city">${loc}</div>
@@ -1244,7 +1266,9 @@ function renderHistItems(list) {
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
         <div style="text-align:right"><div class="hi-count">${qtd}</div><div class="hi-lbl">resultados</div></div>
         <div style="display:flex;gap:5px">
-          ${canRestore ? `<button class="ab hist-restore" onclick="restoreSearch('${safeKey}')">↩ Restaurar</button>` : ''}
+          ${canRestore
+            ? `<button class="ab hist-restore" onclick="restoreSearch('${safeKey}')" title="Ver os resultados salvos sem consumir a API">👁 Ver Resultados</button>`
+            : `<button class="ab" onclick="rebuscar('${safeState}','${safeCity}','${hMode}')" style="font-size:12px" title="Refazer esta busca na API">🔄 Pesquisar</button>`}
           ${h.updated_at ? `<button class="ab hist-del" onclick="deleteHistory('${safeKey}')">🗑</button>` : ''}
         </div>
       </div>`;
@@ -1282,6 +1306,18 @@ async function restoreSearch(searchKey) {
   const modeLabel = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
   showToast(`${cos.length} empresas restauradas · ${modeLabel}`);
   go('b');
+}
+
+function rebuscar(state, city, mode) {
+  go('b');
+  searchMode = mode || 'vendedores';
+  setTimeout(() => {
+    const ufSel = g('suf');
+    const cidEl = g('scid');
+    if (ufSel) ufSel.value = state;
+    if (cidEl)  cidEl.value = city || '';
+    buscar();
+  }, 150);
 }
 
 async function deleteHistory(searchKey) {
