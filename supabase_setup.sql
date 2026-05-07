@@ -50,9 +50,34 @@ CREATE TABLE IF NOT EXISTS search_limits (
 
 -- ──────────────────────────────────────────────────────────────
 -- DESABILITAR RLS em todas as tabelas
--- (o app usa autenticação local, não Supabase Auth)
 -- ──────────────────────────────────────────────────────────────
 ALTER TABLE searches      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE stores        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE favorites     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE search_limits DISABLE ROW LEVEL SECURITY;
+
+-- ──────────────────────────────────────────────────────────────
+-- AUTO-CONFIRMAR E-MAIL NO CADASTRO (sem envio de confirmação)
+-- Execute este bloco no Supabase SQL Editor para que novos
+-- usuários entrem diretamente no sistema após se cadastrar.
+-- ──────────────────────────────────────────────────────────────
+
+-- Confirmar todos os usuários já existentes não confirmados
+UPDATE auth.users SET email_confirmed_at = NOW() WHERE email_confirmed_at IS NULL;
+
+-- Função que auto-confirma o e-mail de qualquer novo usuário
+CREATE OR REPLACE FUNCTION public.auto_confirm_new_user()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE auth.users
+  SET email_confirmed_at = NOW()
+  WHERE id = NEW.id AND email_confirmed_at IS NULL;
+  RETURN NEW;
+END;
+$$;
+
+-- Trigger: dispara após cada novo cadastro
+DROP TRIGGER IF EXISTS trg_auto_confirm_user ON auth.users;
+CREATE TRIGGER trg_auto_confirm_user
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.auto_confirm_new_user();

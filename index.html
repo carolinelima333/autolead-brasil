@@ -343,14 +343,21 @@ async function doAuth() {
       if (pwErrs.length > 0) { setErr('A senha deve conter: ' + pwErrs.join(', ') + '.'); return; }
       const { data, error } = await sb.auth.signUp({ email: e, password: p, options: { data: { name: n } } });
       if (error) throw error;
-      if (data.user && !data.session) {
-        const el = g('aerr');
-        el.style.color = 'var(--green)'; el.style.background = 'rgba(34,197,94,.08)'; el.style.border = '1px solid rgba(34,197,94,.2)';
-        el.textContent = '✅ Conta criada! Verifique seu e-mail para ativar o acesso.';
-        el.style.display = 'block';
-        return;
+      if (data.session) {
+        enterApp(data.user);
+      } else if (data.user) {
+        // Tenta login imediato (funciona quando auto-confirm está ativo no Supabase)
+        const { data: sd, error: se } = await sb.auth.signInWithPassword({ email: e, password: p });
+        if (sd?.session) {
+          enterApp(sd.user);
+        } else {
+          // Fallback: confirmação de e-mail ainda pendente
+          const el = g('aerr');
+          el.style.color = 'var(--green)'; el.style.background = 'rgba(34,197,94,.08)'; el.style.border = '1px solid rgba(34,197,94,.2)';
+          el.textContent = '✅ Conta criada! Verifique seu e-mail para ativar o acesso.';
+          el.style.display = 'block';
+        }
       }
-      if (data.session) enterApp(data.user);
     } else {
       btn.textContent = 'Entrando...';
       const { data, error } = await sb.auth.signInWithPassword({ email: e, password: p });
