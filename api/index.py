@@ -40,7 +40,10 @@ _BACKOFF_BASE = 1
 
 _BLOCK_WORDS = frozenset({
     'borracharia', 'borrachas', 'borracheiro',
-    'reforma de pneu', 'conserto de pneu', 'recapagem',
+    'reforma de pneu', 'conserto de pneu', 'recapagem', 'recauchutagem',
+    'vulcanização', 'vulcanizacao', 'alinhamento', 'balanceamento',
+    'oficina', 'mecânica', 'mecanica', 'auto center', 'autocenter',
+    'funilaria', 'funileiro', 'pintura automotiva',
 })
 
 _CAPITAIS: dict[str, str] = {

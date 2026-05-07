@@ -71,32 +71,58 @@ function tgAuth() {
   g('ip2w').style.display = signup ? 'block' : 'none';
   clrErr();
 }
-function doAuth() {
+async function doAuth() {
   const e = g('ie').value.trim(), p = g('ip').value;
   if (!e || !p) { setErr('Preencha e-mail e senha.'); return; }
   if (!e.includes('@')) { setErr('E-mail inválido.'); return; }
-  if (signup) {
-    const n = g('iname').value.trim(), p2 = g('ip2').value;
-    if (!n) { setErr('Digite seu nome.'); return; }
-    if (p !== p2) { setErr('Senhas não conferem.'); return; }
-    if (p.length < 6) { setErr('Mínimo 6 caracteres.'); return; }
-    user = { email: e, name: n };
-  } else {
-    user = { email: e, name: e.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase()) };
+
+  const btn = g('abtn');
+  if (btn) { btn.disabled = true; btn.textContent = signup ? 'Criando conta...' : 'Entrando...'; }
+
+  try {
+    let name;
+    if (signup) {
+      const n = g('iname').value.trim(), p2 = g('ip2').value;
+      if (!n) { setErr('Digite seu nome.'); return; }
+      if (p !== p2) { setErr('Senhas não conferem.'); return; }
+      if (p.length < 6) { setErr('Mínimo 6 caracteres.'); return; }
+      name = n;
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: e, password: p, name: n }),
+      });
+      const body = await res.json();
+      if (!body.ok) { setErr(body.error || 'Erro ao criar conta.'); return; }
+    }
+
+    const { data, error } = await sb.auth.signInWithPassword({ email: e, password: p });
+    if (error) { setErr(error.message); return; }
+
+    const meta = data.user?.user_metadata || {};
+    name = name || meta.name || e.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    user = { email: e, name };
+
+    clrErr();
+    g('sc-auth').style.display = 'none';
+    g('sc-main').style.display = 'flex';
+    const n = user.name;
+    ['sav','mob-av','drawer-av'].forEach(id => { const el = g(id); if (el) el.textContent = n[0].toUpperCase(); });
+    if (g('snm')) g('snm').textContent = n;
+    if (g('semail')) g('semail').textContent = user.email;
+    if (g('drawer-nm')) g('drawer-nm').textContent = n;
+    if (g('drawer-em')) g('drawer-em').textContent = user.email;
+    loadFavs();
+    go('b');
+  } catch(err) {
+    setErr('Erro de conexão. Tente novamente.');
+    console.error('[auth]', err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = signup ? 'Criar conta' : 'Entrar'; }
   }
-  clrErr();
-  g('sc-auth').style.display = 'none';
-  g('sc-main').style.display = 'flex';
-  const n = user.name;
-  ['sav','mob-av','drawer-av'].forEach(id => { const el = g(id); if (el) el.textContent = n[0].toUpperCase(); });
-  if (g('snm')) g('snm').textContent = n;
-  if (g('semail')) g('semail').textContent = user.email;
-  if (g('drawer-nm')) g('drawer-nm').textContent = n;
-  if (g('drawer-em')) g('drawer-em').textContent = user.email;
-  loadFavs();
-  go('b');
 }
 function logout() {
+  if (sb) sb.auth.signOut();
   user = null; cos = []; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
@@ -276,12 +302,12 @@ async function apiDetails(placeId) {
 }
 function detectTipo(types, nome) {
   const n = (nome || '').toLowerCase();
-  if (n.includes('distribuidora') || n.includes('atacadista') || n.includes('atacado de pneu')) return 'Atacadista de Pneus';
-  if (n.includes('pneu') || n.includes('tyre') || n.includes('tire') || n.includes('revenda de pneu')) return 'Loja de Pneus';
-  if (n.includes('transport') || n.includes('frete') || n.includes('logística') || n.includes('logistica') || n.includes('frota')) return 'Frotista / Transportadora';
-  if (n.includes('borracharia') || n.includes('borracha')) return 'Borracharia';
-  if (n.includes('auto center') || n.includes('autocenter')) return 'Auto Center';
-  if (types.includes('car_repair')) return 'Auto Center';
+  if (n.includes('distribuidora') || n.includes('atacadista') || n.includes('atacado de pneu') || n.includes('truck center')) return 'Atacadista de Pneus';
+  if (n.includes('pneu') || n.includes('tyre') || n.includes('tire') || n.includes('revenda de pneu') || n.includes('loja de pneu') || n.includes('comércio de pneu') || n.includes('comercio de pneu')) return 'Loja de Pneus';
+  if (n.includes('transport') || n.includes('frete') || n.includes('logística') || n.includes('logistica') || n.includes('frota') || n.includes('cargas') || n.includes('carga') || n.includes('rodoviário') || n.includes('rodoviario')) return 'Frotista / Transportadora';
+  if (n.includes('borracharia') || n.includes('borracha') || n.includes('reforma de pneu') || n.includes('recapagem') || n.includes('recauchutagem') || n.includes('conserto de pneu')) return 'Borracharia';
+  if (n.includes('auto center') || n.includes('autocenter') || n.includes('oficina') || n.includes('mecânica') || n.includes('mecanica')) return 'Auto Center';
+  if (types.includes('car_repair') || types.includes('car_dealer')) return 'Auto Center';
   return 'Comércio Automotivo';
 }
 
@@ -399,7 +425,12 @@ async function buscar() {
     }
 
     setP(85, `Processando ${allResults.length} resultados...`);
-    cos = allResults.map((p, i) => textToCard(p, i));
+    const tiposVendedor  = new Set(['Atacadista de Pneus','Loja de Pneus']);
+    const tiposComprador = new Set(['Frotista / Transportadora']);
+    const tiposValidos   = searchMode === 'compradores' ? tiposComprador : tiposVendedor;
+    cos = allResults
+      .map((p, i) => textToCard(p, i))
+      .filter(c => tiposValidos.has(c.tipo));
     currentPage = 0;
 
     setP(95, 'Salvando no banco...');
