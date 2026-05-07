@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import logging
@@ -12,10 +12,18 @@ try:
 except ImportError:
     pass
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S',
+)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Pasta do frontend — resolve corretamente rodando local ou no Vercel
+_BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(_BASE_DIR, 'frontend')
+
+app = Flask(__name__, static_folder=FRONTEND_DIR)
 CORS(app)
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
@@ -32,15 +40,15 @@ _BLOCK_WORDS = frozenset({
 })
 
 _CAPITAIS: dict[str, str] = {
-    'AC': 'Rio Branco',    'AL': 'Maceió',          'AM': 'Manaus',
-    'AP': 'Macapá',        'BA': 'Salvador',         'CE': 'Fortaleza',
-    'DF': 'Brasília',      'ES': 'Vitória',          'GO': 'Goiânia',
-    'MA': 'São Luís',      'MG': 'Belo Horizonte',   'MS': 'Campo Grande',
-    'MT': 'Cuiabá',        'PA': 'Belém',            'PB': 'João Pessoa',
-    'PE': 'Recife',        'PI': 'Teresina',         'PR': 'Curitiba',
-    'RJ': 'Rio de Janeiro','RN': 'Natal',            'RO': 'Porto Velho',
-    'RR': 'Boa Vista',     'RS': 'Porto Alegre',     'SC': 'Florianópolis',
-    'SE': 'Aracaju',       'SP': 'São Paulo',        'TO': 'Palmas',
+    'AC': 'Rio Branco',     'AL': 'Maceió',           'AM': 'Manaus',
+    'AP': 'Macapá',         'BA': 'Salvador',          'CE': 'Fortaleza',
+    'DF': 'Brasília',       'ES': 'Vitória',           'GO': 'Goiânia',
+    'MA': 'São Luís',       'MG': 'Belo Horizonte',    'MS': 'Campo Grande',
+    'MT': 'Cuiabá',         'PA': 'Belém',             'PB': 'João Pessoa',
+    'PE': 'Recife',         'PI': 'Teresina',          'PR': 'Curitiba',
+    'RJ': 'Rio de Janeiro', 'RN': 'Natal',             'RO': 'Porto Velho',
+    'RR': 'Boa Vista',      'RS': 'Porto Alegre',      'SC': 'Florianópolis',
+    'SE': 'Aracaju',        'SP': 'São Paulo',         'TO': 'Palmas',
 }
 
 
@@ -51,10 +59,10 @@ def _is_blocked_name(name: str) -> bool:
 
 def _places_request(query: str, api_key: str, page_token: Optional[str] = None) -> dict:
     params: dict = {
-        'query': query,
-        'key': api_key,
+        'query':    query,
+        'key':      api_key,
         'language': 'pt-BR',
-        'region': 'BR',
+        'region':   'BR',
     }
     if page_token:
         params['pagetoken'] = page_token
@@ -70,7 +78,8 @@ def _places_request(query: str, api_key: str, page_token: Optional[str] = None) 
             return resp.json()
         except Exception as exc:
             wait = _BACKOFF_BASE ** attempt
-            logger.warning('[places] tentativa %d/%d falhou — %s', attempt + 1, _RETRY, exc)
+            logger.warning('[places] tentativa %d/%d falhou — %s — retry em %ds',
+                           attempt + 1, _RETRY, exc, wait)
             if attempt < _RETRY - 1:
                 time.sleep(wait)
 
@@ -78,17 +87,21 @@ def _places_request(query: str, api_key: str, page_token: Optional[str] = None) 
 
 
 def _paginate(query: str, api_key: str) -> tuple[list[dict], list[str]]:
-    results: list[dict] = []
-    errors:  list[str]  = []
+    results:    list[dict] = []
+    errors:     list[str]  = []
     page_token: Optional[str] = None
 
     for page in range(_MAX_PAGES):
         if page > 0:
             time.sleep(_TOKEN_DELAY)
+
         data   = _places_request(query, api_key, page_token)
         status = data.get('status', 'UNKNOWN')
+
         if status == 'OK':
-            results.extend(data.get('results', []))
+            batch = data.get('results', [])
+            results.extend(batch)
+            logger.info('[paginate] p%d — %d resultado(s) — "%s"', page + 1, len(batch), query[:70])
             page_token = data.get('next_page_token')
             if not page_token:
                 break
@@ -97,12 +110,15 @@ def _paginate(query: str, api_key: str) -> tuple[list[dict], list[str]]:
         elif status in ('REQUEST_DENIED', 'INVALID_REQUEST'):
             msg = f'{status}: {data.get("error_message", "")}'
             errors.append(msg)
+            logger.error('[paginate] %s', msg)
             break
         elif status == 'OVER_QUERY_LIMIT':
             errors.append('OVER_QUERY_LIMIT')
+            logger.warning('[paginate] rate limit atingido')
             break
         else:
             errors.append(f'status={status}')
+            logger.warning('[paginate] status inesperado: %s', status)
             break
 
     return results, errors
@@ -118,8 +134,11 @@ def _get_cidades(uf: str) -> list[str]:
             timeout=10,
         )
         resp.raise_for_status()
-        return [m['nome'].title() for m in resp.json()]
-    except Exception:
+        cidades = [m['nome'].title() for m in resp.json()]
+        logger.info('[ibge] %d municípios para %s', len(cidades), uf)
+        return cidades
+    except Exception as exc:
+        logger.error('[ibge] erro ao buscar municípios de %s: %s', uf, exc)
         return []
 
 
@@ -136,19 +155,25 @@ def _format(raw: dict) -> dict:
     }
 
 
-def buscar_empresas(estado_uf: str, cidade: str, query: str, api_key: str) -> dict:
+def buscar_empresas(estado_uf: str, cidade: str, query: str,
+                    api_key: str, max_cidades: int = _MAX_CITIES) -> dict:
     seen:   dict[str, dict] = {}
     errors: list[str]       = []
 
     if cidade:
         locais = [f'{cidade}, {estado_uf}, Brasil']
+        logger.info('[buscar] modo cidade — %s/%s — query="%s"', cidade, estado_uf, query)
     else:
         cidades = _get_cidades(estado_uf)
         if cidades:
-            locais = [f'{c}, {estado_uf}, Brasil' for c in cidades[:_MAX_CITIES]]
+            sel    = cidades[:max_cidades]
+            locais = [f'{c}, {estado_uf}, Brasil' for c in sel]
+            logger.info('[buscar] modo estado — %d cidade(s) de %s — query="%s"',
+                        len(sel), estado_uf, query)
         else:
-            capital = _CAPITAIS.get(estado_uf, '')
-            locais = [f'{capital or estado_uf}, {estado_uf}, Brasil']
+            capital = _CAPITAIS.get(estado_uf, estado_uf)
+            locais  = [f'{capital}, {estado_uf}, Brasil']
+            logger.warning('[buscar] fallback capital — %s/%s', capital, estado_uf)
 
     for local in locais:
         raw, errs = _paginate(f'{query} em {local}', api_key)
@@ -166,14 +191,22 @@ def buscar_empresas(estado_uf: str, cidade: str, query: str, api_key: str) -> di
                     seen[pid] = r
 
     results = [_format(r) for r in seen.values() if not _is_blocked_name(r.get('name', ''))]
-    return {'total_unique': len(results), 'results': results, 'errors': list(dict.fromkeys(errors))}
+    logger.info('[buscar] concluído — %d único(s), %d erro(s)', len(results), len(errors))
+    return {
+        'total_unique': len(results),
+        'results':      results,
+        'errors':       list(dict.fromkeys(errors)),
+    }
 
+
+# ─── ENDPOINTS ────────────────────────────────────────────────
 
 @app.route('/api/buscar')
 def api_buscar():
-    uf     = request.args.get('uf', '').strip().upper()
-    query  = request.args.get('query', '').strip()
-    cidade = request.args.get('cidade', '').strip()
+    uf          = request.args.get('uf',          '').strip().upper()
+    query       = request.args.get('query',       '').strip()
+    cidade      = request.args.get('cidade',      '').strip()
+    max_cidades = int(request.args.get('max_cidades', _MAX_CITIES))
 
     if not uf:
         return jsonify({'error': 'Parâmetro uf obrigatório'}), 400
@@ -182,7 +215,7 @@ def api_buscar():
     if not GOOGLE_API_KEY:
         return jsonify({'error': 'GOOGLE_API_KEY não configurada no servidor'}), 500
 
-    return jsonify(buscar_empresas(uf, cidade, query, GOOGLE_API_KEY))
+    return jsonify(buscar_empresas(uf, cidade, query, GOOGLE_API_KEY, max_cidades=max_cidades))
 
 
 @app.route('/api/details')
@@ -206,3 +239,23 @@ def api_details():
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# Rotas estáticas — usadas apenas no servidor local (no Vercel o frontend é servido diretamente)
+@app.route('/')
+def index():
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
+
+@app.route('/<path:path>')
+def static_files(path):
+    return send_from_directory(FRONTEND_DIR, path)
+
+
+if __name__ == '__main__':
+    port   = int(os.getenv('PORT', 3000))
+    key_ok = bool(GOOGLE_API_KEY)
+    print(f'\n✅  AutoLead Brasil rodando em http://localhost:{port}')
+    print(f'🔑  Google API Key: {"configurada" if key_ok else "NÃO CONFIGURADA — crie o arquivo .env com GOOGLE_API_KEY"}')
+    print('Pressione Ctrl+C para parar.\n')
+    app.run(host='0.0.0.0', port=port, debug=False)

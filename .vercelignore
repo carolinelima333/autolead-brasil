@@ -2,9 +2,13 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .env
 *.log
 node_modules/
+dist/
 INICIAR_MAC.sh
 INICIAR_WINDOWS.bat
-backend/
+supabase_setup.sql
+.env.example
+README.md
