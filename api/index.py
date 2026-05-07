@@ -28,7 +28,9 @@ FRONTEND_DIR = _BASE_DIR
 app = Flask(__name__, static_folder=FRONTEND_DIR)
 CORS(app)
 
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
+GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '')
+SUPABASE_URL        = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.co')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
 
 _MAX_PAGES    = 2
 _TOKEN_DELAY  = 2.0
@@ -202,6 +204,50 @@ def buscar_empresas(estado_uf: str, cidade: str, query: str,
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """Cria usuário via Admin API do Supabase — auto-confirma sem enviar e-mail."""
+    data     = request.get_json(silent=True) or {}
+    email    = (data.get('email')    or '').strip()
+    password = (data.get('password') or '').strip()
+    name     = (data.get('name')     or '').strip()
+
+    if not email or not password or not name:
+        return jsonify({'ok': False, 'error': 'Dados incompletos'}), 400
+    if not SUPABASE_SERVICE_KEY:
+        return jsonify({'ok': False, 'error': 'SUPABASE_SERVICE_KEY não configurada no servidor'}), 500
+
+    try:
+        resp = requests.post(
+            f'{SUPABASE_URL}/auth/v1/admin/users',
+            headers={
+                'apikey':        SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type':  'application/json',
+            },
+            json={
+                'email':          email,
+                'password':       password,
+                'user_metadata':  {'name': name},
+                'email_confirm':  True,
+            },
+            timeout=10,
+        )
+        body = resp.json()
+        if resp.status_code in (200, 201):
+            logger.info('[register] usuário criado: %s', email)
+            return jsonify({'ok': True})
+
+        msg = body.get('message') or body.get('error') or 'Erro ao criar conta'
+        if 'already registered' in msg.lower() or 'already exists' in msg.lower():
+            msg = 'Este e-mail já está cadastrado. Faça login.'
+        logger.warning('[register] falha para %s: %s', email, msg)
+        return jsonify({'ok': False, 'error': msg}), 400
+    except Exception as exc:
+        logger.error('[register] %s', exc)
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
 
 @app.route('/api/buscar')
 def api_buscar():
