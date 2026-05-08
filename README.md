@@ -1,6 +1,6 @@
 # AutoLead Brasil
 
-Plataforma web de prospecção de leads no setor automotivo (pneus), com busca via Google Places API, validação de CNPJ e CRM básico.
+Plataforma web de prospecção de leads no setor automotivo (pneus), com busca via Google Places API, validação de CNPJ, CRM integrado e exportação de dados.
 
 ---
 
@@ -9,13 +9,16 @@ Plataforma web de prospecção de leads no setor automotivo (pneus), com busca v
 - Busca de empresas por estado ou cidade via Google Places API
 - Dois modos de busca: **Lojas & Atacadistas** e **Frotistas / Compradores**
 - Filtragem automática de borracharias (serviços de reparo)
-- Validação de CNAE via consulta de CNPJ (BrasilAPI, ReceitaWS, CNPJ.ws)
+- Validação de CNPJ com 3 APIs em fallback (BrasilAPI, ReceitaWS, CNPJ.ws)
 - Identificação de leads novos (empresa aberta há menos de 24 meses)
-- Histórico de pesquisas e cache de resultados no Supabase
-- Favoritos salvos por usuário no banco de dados
-- CRM básico: registro de lojas com status de relacionamento
-- Exportação de leads em CSV
-- Tema claro/escuro
+- Histórico permanente de pesquisas com filtros por estado e modo — restaura resultados sem consumir a API
+- Cache de resultados no Supabase (7 dias por busca)
+- Favoritos salvos por usuário no banco de dados, com busca textual
+- CRM: registro de lojas com tabs por status (Em contato / Retornar depois / Sem interesse / Concluído) e edição inline
+- Exportação de leads em CSV, Excel e PDF
+- Autenticação via Supabase (cadastro auto-confirmado, sem e-mail de verificação)
+- Limite diário de 10 buscas por localidade/modo por usuário
+- Tema claro/escuro, sidebar desktop + drawer mobile
 
 ---
 
@@ -23,7 +26,7 @@ Plataforma web de prospecção de leads no setor automotivo (pneus), com busca v
 
 - Python 3.8+
 - Conta no [Google Cloud](https://console.cloud.google.com) com **Places API** ativada
-- Projeto no [Supabase](https://supabase.com) (banco de dados)
+- Projeto no [Supabase](https://supabase.com) com as tabelas criadas (veja `supabase_setup.sql`)
 
 ---
 
@@ -64,19 +67,32 @@ cp .env.example .env
 Edite o arquivo `.env` com suas chaves:
 
 ```env
-GOOGLE_API_KEY=sua_chave_aqui
+GOOGLE_API_KEY=sua_chave_google_aqui
+PORT=3000
+SUPABASE_SERVICE_KEY=sua_service_role_key_aqui
+SUPABASE_URL=https://SEU_PROJETO.supabase.co
 ```
 
-### 5. Inicie o servidor
+> A `SUPABASE_SERVICE_KEY` é a chave `service_role` (secret), disponível em: **Supabase Dashboard → Settings → API**.
+
+### 5. Configure o banco de dados
+
+Execute o arquivo `supabase_setup.sql` no **Supabase SQL Editor** para criar as tabelas, políticas de segurança (RLS) e o trigger de auto-confirmação de e-mail.
+
+### 6. Inicie o servidor
 
 ```bash
 python api/index.py
 ```
 
-Ou use o atalho (Windows):
+Ou use o atalho:
 
 ```bash
+# Windows
 INICIAR_WINDOWS.bat
+
+# Mac/Linux
+bash INICIAR_MAC.sh
 ```
 
 O sistema estará disponível em `http://localhost:3000`.
@@ -86,8 +102,6 @@ O sistema estará disponível em `http://localhost:3000`.
 ## Deploy no Vercel
 
 ### Estrutura compatível
-
-O projeto já está configurado para Vercel:
 
 - Arquivos estáticos (`index.html`, `css/`, `js/`) são servidos da raiz
 - A API Flask (`api/index.py`) roda como serverless function Python
@@ -113,17 +127,17 @@ vercel --prod
 
 Ou conecte o repositório diretamente em [vercel.com](https://vercel.com) para deploy automático a cada push no GitHub.
 
-**3. Configure a variável de ambiente no Vercel:**
+**3. Configure as variáveis de ambiente no Vercel:**
 
 > Dashboard do Vercel → Seu Projeto → **Settings → Environment Variables**
 
-Adicione:
-
 | Nome | Valor |
 |------|-------|
-| `GOOGLE_API_KEY` | sua chave da Google Places API |
+| `GOOGLE_API_KEY` | Chave da Google Places API |
+| `SUPABASE_URL` | URL do seu projeto Supabase |
+| `SUPABASE_SERVICE_KEY` | Chave `service_role` do Supabase |
 
-> O arquivo `.env` é ignorado no deploy (`.vercelignore`). A variável deve ser configurada pelo painel.
+> O arquivo `.env` é ignorado no deploy (`.vercelignore`). As variáveis devem ser configuradas pelo painel.
 
 ---
 
@@ -132,19 +146,21 @@ Adicione:
 ```
 autolead-brasil/
 ├── api/
-│   └── index.py          # Backend Flask — endpoints /api/buscar e /api/details
+│   └── index.py          # Backend Flask (serverless no Vercel)
 ├── css/
-│   └── styles.css        # Estilos da interface
+│   └── styles.css        # Estilos — tema dark/light com CSS vars
 ├── js/
-│   └── app.js            # JavaScript do frontend (referência local)
+│   └── app.js            # Versão legada (JS inline em index.html é o ativo)
 ├── dist/                 # Ignorado pelo Vercel (.vercelignore)
 ├── index.html            # Frontend completo (JS inline)
+├── supabase_setup.sql    # Script SQL para criar tabelas e políticas no Supabase
 ├── requirements.txt      # Dependências Python
 ├── vercel.json           # Configuração de rotas e headers do Vercel
 ├── .env.example          # Exemplo de variáveis de ambiente
 ├── .vercelignore         # Arquivos excluídos do deploy
 ├── .gitignore
 ├── INICIAR_WINDOWS.bat   # Atalho para rodar localmente no Windows
+├── INICIAR_MAC.sh        # Atalho para rodar localmente no Mac/Linux
 └── README.md
 ```
 
@@ -154,13 +170,28 @@ autolead-brasil/
 
 | Método | Rota | Parâmetros | Descrição |
 |--------|------|------------|-----------|
-| GET | `/api/buscar` | `uf`, `query`, `cidade` (opcional) | Busca empresas via Google Places |
-| GET | `/api/details` | `place_id` | Detalhes de uma empresa (telefone, site, coordenadas) |
+| `POST` | `/api/register` | `email`, `password`, `name` | Cria usuário via Admin API do Supabase (auto-confirma e-mail) |
+| `GET`  | `/api/buscar` | `uf`, `query`, `cidade` (opcional), `max_cidades` (opcional) | Busca empresas via Google Places |
+| `GET`  | `/api/details` | `place_id` | Detalhes de uma empresa (telefone, site, coordenadas) |
+
+---
+
+## Banco de dados (Supabase)
+
+| Tabela | Descrição |
+|--------|-----------|
+| `searches` | Cache de pesquisas por 7 dias — unique por `(user_email, search_key)` |
+| `search_history` | Histórico permanente de pesquisas — acumula todos os registros |
+| `stores` | CRM de lojas registradas — unique por `company_id` |
+| `favorites` | Favoritos por usuário — unique por `(user_email, place_id)` |
+| `search_limits` | Rate limit diário (10 buscas/dia por localidade/modo) |
+
+Todas as tabelas usam **Row Level Security (RLS)**: cada usuário acessa apenas seus próprios dados.
 
 ---
 
 ## Observações
 
-- **Timeout no Vercel (plano gratuito):** o limite é 10 segundos por requisição. Buscas por estado inteiro fazem múltiplas chamadas à API e podem ser lentas. A busca por **cidade específica** é mais rápida e confiável.
-- **Cache de resultados:** os resultados ficam salvos no Supabase por 7 dias (`CACHE_TTL_DAYS`). Pesquisas repetidas na mesma localidade não consomem a API do Google.
-- **Limite diário:** cada combinação de localidade/modo é limitada a 10 buscas por dia por usuário (`MAX_DAILY`).
+- **Timeout no Vercel (plano gratuito):** o limite é 10 segundos por requisição. A busca por **cidade específica** é mais rápida e confiável do que busca por estado inteiro.
+- **Cache de resultados:** pesquisas repetidas na mesma localidade (dentro de 7 dias) não consomem a API do Google.
+- **Limite diário:** cada combinação de localidade/modo é limitada a 10 buscas por dia por usuário.
