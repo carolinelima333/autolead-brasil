@@ -415,6 +415,10 @@ async function enterApp(authUser) {
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
   loadFavs();
   loadDailyLimits();
+  loadStores().then(list => {
+    window._storesList = list;
+    if (ctab === 'b' && filterType === 'novo') exibir();
+  });
   await autoRestoreLastSearch();
   go('b');
 }
@@ -792,7 +796,10 @@ function exibir() {
   if      (filterType === 'atacado')  lista = cos.filter(x => x.tipo === 'Atacadista de Pneus');
   else if (filterType === 'loja')     lista = cos.filter(x => x.tipo === 'Loja de Pneus');
   else if (filterType === 'frotista') lista = cos.filter(x => x.tipo === 'Frotista / Transportadora');
-  else if (filterType === 'novo')     lista = cos.filter(x => x._isNovo === true);
+  else if (filterType === 'novo') {
+    const registradas = new Set((window._storesList || []).map(s => s.company_id).filter(Boolean));
+    lista = cos.filter(x => x.id && !registradas.has(x.id));
+  }
 
   const total = lista.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -1629,7 +1636,14 @@ async function submitStore() {
     const msg = currentStoreId ? 'Loja atualizada com sucesso!' : 'Loja registrada com sucesso!';
     closeStoreModal();
     showToast(msg);
+    if (storeData.company_id) {
+      window._storesList = window._storesList || [];
+      if (!window._storesList.some(s => s.company_id === storeData.company_id)) {
+        window._storesList.push(storeData);
+      }
+    }
     if (ctab === 's') go('s');
+    else if (ctab === 'b' && filterType === 'novo') exibir();
   } catch(e) {
     console.error('[stores] submitStore:', e);
     const err = g('st-err'); if (err){ err.textContent='Erro: '+(e.message||'Tente novamente.'); err.style.display='block'; }
@@ -1642,6 +1656,7 @@ async function deleteStore(id) {
   try {
     const { error } = await sb.from('stores').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    if (window._storesList) window._storesList = window._storesList.filter(s => s.id !== id);
     go('s');
   } catch(e) { alert('Erro ao remover: '+e.message); }
 }
