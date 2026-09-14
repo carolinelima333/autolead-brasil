@@ -295,6 +295,21 @@ def api_details():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/index.py', methods=['GET', 'POST'])
+def api_dispatch():
+    """No Vercel o rewrite de vercel.json entrega o caminho original apenas
+    via query string (?path=buscar), não como PATH_INFO real — sem isso o
+    Flask cai na rota estática abaixo e serve o .py bruto em vez de executar."""
+    action = request.args.get('path', '')
+    if action == 'buscar':
+        return api_buscar()
+    if action == 'details':
+        return api_details()
+    if action == 'register':
+        return api_register()
+    return jsonify({'error': 'ação desconhecida'}), 404
+
+
 # Rotas estáticas — usadas apenas no servidor local (no Vercel o frontend é servido diretamente)
 @app.route('/')
 def index():
