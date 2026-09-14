@@ -173,6 +173,9 @@ def buscar_empresas(estado_uf: str, cidade: str, query: str,
     else:
         cidades = _get_cidades(estado_uf)
         if cidades:
+            capital = _CAPITAIS.get(estado_uf)
+            if capital and capital in cidades:
+                cidades = [capital] + [c for c in cidades if c != capital]
             sel    = cidades[:max_cidades]
             locais = [f'{c}, {estado_uf}, Brasil' for c in sel]
             logger.info('[buscar] modo estado — %d cidade(s) de %s — query="%s"',
