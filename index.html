@@ -285,7 +285,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sb) {
     try {
       const { data: { session } } = await sb.auth.getSession();
-      if (session && session.user) { enterApp(session.user); return; }
+      if (session && session.user) {
+        if (idleExpired()) { await logout(); showIdleMsg(); }
+        else { enterApp(session.user); return; }
+      }
     } catch(e) { console.warn('Session:', e); }
     sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session && !user) enterApp(session.user);
@@ -406,6 +409,7 @@ async function enterApp(authUser) {
     ? authUser.user_metadata.name
     : authUser.email.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
   user = { email: authUser.email, name };
+  startIdleWatch();
   clrErr();
   g('sc-auth').style.display = 'none';
   g('sc-main').style.display = 'flex';
@@ -444,7 +448,47 @@ async function autoRestoreLastSearch() {
   } catch(e) { console.warn('[autoRestore]', e); }
 }
 
+// ─── LOGOUT POR INATIVIDADE ───────────────────────────────────
+// A última atividade fica no localStorage: vale entre abas e sobrevive a
+// suspensão do PC ou fechar/reabrir a página.
+const IDLE_LIMIT_MS = 15 * 60 * 1000;
+const IDLE_KEY = 'al_last_activity';
+let idleTimer = null, lastActWrite = 0;
+
+function getLastActivity() {
+  try { return parseInt(localStorage.getItem(IDLE_KEY), 10) || 0; } catch(e) { return 0; }
+}
+function markActivity() {
+  const now = Date.now();
+  if (now - lastActWrite < 5000) return; // evita gravar a cada movimento do mouse
+  lastActWrite = now;
+  try { localStorage.setItem(IDLE_KEY, String(now)); } catch(e) {}
+}
+function idleExpired() {
+  const last = getLastActivity();
+  return last > 0 && Date.now() - last > IDLE_LIMIT_MS;
+}
+function showIdleMsg() {
+  setErr('Sua sessão foi encerrada após 15 minutos sem uso. Entre novamente.');
+}
+function startIdleWatch() {
+  lastActWrite = 0; markActivity();
+  if (idleTimer) return;
+  ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev =>
+    document.addEventListener(ev, markActivity, { passive: true, capture: true }));
+  idleTimer = setInterval(async () => {
+    if (user && idleExpired()) { await logout(); showIdleMsg(); }
+  }, 30000);
+}
+function stopIdleWatch() {
+  if (idleTimer) { clearInterval(idleTimer); idleTimer = null; }
+  ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev =>
+    document.removeEventListener(ev, markActivity, { capture: true }));
+  try { localStorage.removeItem(IDLE_KEY); } catch(e) {}
+}
+
 async function logout() {
+  stopIdleWatch();
   if (sb) await sb.auth.signOut().catch(() => {});
   user = null; cos = []; cacheCtx = null; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
   dailyLimits = { vendedores: 0, compradores: 0 };
