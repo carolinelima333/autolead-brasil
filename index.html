@@ -255,6 +255,7 @@ const CACHE_TTL_DAYS = 7;
 let sb = null;
 let user = null, signup = false, ctab = 'b';
 let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'todos';
+let cacheCtx = null; // { key, uf, cid } da busca atual — usado para salvar contatos carregados
 let searchMode = 'vendedores';
 let theme = localStorage.getItem('al_theme') || 'dark';
 let currentStoreIdx = undefined;
@@ -436,6 +437,7 @@ async function autoRestoreLastSearch() {
     if (!data || !data.results || !data.results.length) return;
     cos = data.results;
     cos.forEach((c, i) => c._idx = i);
+    cacheCtx = null;
     searchMode = data.mode || 'vendedores';
     currentPage = 0;
     filterType = 'todos';
@@ -444,7 +446,7 @@ async function autoRestoreLastSearch() {
 
 async function logout() {
   if (sb) await sb.auth.signOut().catch(() => {});
-  user = null; cos = []; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
+  user = null; cos = []; cacheCtx = null; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
   dailyLimits = { vendedores: 0, compradores: 0 };
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
@@ -678,10 +680,7 @@ function textToCard(p, idx) {
   };
 }
 
-async function loadDetails(idx) {
-  const co = cos[idx]; if (!co) return;
-  const btn = g('det_' + idx);
-  if (btn) { btn.disabled = true; btn.textContent = '⌛ Carregando...'; }
+async function loadDetails(co) {
   const details = await apiDetails(co.id);
   if (details) {
     co.telefone  = details.telefone  || '';
@@ -691,8 +690,28 @@ async function loadDetails(idx) {
     co.lon       = details.lon;
   }
   co._detailsLoaded = true;
-  const cardEl = document.querySelector(`.cc[data-idx="${idx}"]`);
+  if (cos[co._idx] !== co) return; // lista mudou (nova busca) — card não está mais na tela
+  const cardEl = document.querySelector(`.cc[data-idx="${co._idx}"]`);
   if (cardEl) cardEl.replaceWith(mkCard(co));
+}
+
+// Carrega telefone/site automaticamente dos cards exibidos (5 requisições em paralelo)
+// e, se a lista veio de uma busca, atualiza o cache para não repetir as chamadas.
+async function autoLoadDetails(lista) {
+  const pend = lista.filter(co => !co._detailsLoaded && !co._detailsLoading && co.id);
+  if (!pend.length) return;
+  pend.forEach(co => co._detailsLoading = true);
+  const ctx = cacheCtx;
+  let i = 0;
+  const worker = async () => {
+    while (i < pend.length) {
+      const co = pend[i++];
+      await loadDetails(co);
+      delete co._detailsLoading;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(5, pend.length) }, worker));
+  if (ctx && ctx === cacheCtx) await saveToCache(ctx.key, ctx.uf, ctx.cid, cos);
 }
 
 // ─── BUSCAR ───────────────────────────────────────────────────
@@ -734,6 +753,7 @@ async function buscar() {
     if (cached && cached.length > 0) {
       cos = cached;
       cos.forEach((c, i) => c._idx = i);
+      cacheCtx = { key: searchKey, uf, cid };
       hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, fromCache: true });
       setP(100, 'Carregado do banco!');
       setTimeout(() => exibir(), 350);
@@ -769,6 +789,7 @@ async function buscar() {
 
     setP(85, `Processando ${allResults.length} resultados...`);
     cos = allResults.map((p, i) => textToCard(p, i));
+    cacheCtx = { key: searchKey, uf, cid };
     currentPage = 0;
 
     setP(95, 'Salvando no banco...');
@@ -822,6 +843,7 @@ function exibir() {
   pagina.forEach(x => gr.appendChild(mkCard(x)));
   el.appendChild(gr);
   if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
+  autoLoadDetails(pagina);
 }
 
 function mkPagination(current, total) {
@@ -870,7 +892,7 @@ function mkCard(co) {
     ? `<div class="cc-phone">📞 ${co.telefone}</div>`
     : co._detailsLoaded
       ? `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não disponível</div>`
-      : `<div class="cc-phone"><button class="ab" id="det_${idx}" onclick="loadDetails(${idx})">📞 Carregar contato</button></div>`;
+      : `<div class="cc-phone" style="color:var(--txt3);font-size:11px">⌛ Carregando contato...</div>`;
 
   const mapsBtn = co.gmaps_url
     ? `<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>`
@@ -1321,6 +1343,7 @@ async function viewHistoryEntry(id) {
     }
     cos = data.results;
     cos.forEach((c, i) => c._idx = i);
+    cacheCtx = null;
     searchMode = data.mode || 'vendedores';
     currentPage = 0;
     filterType = 'todos';
