@@ -232,11 +232,7 @@ def api_register():
     try:
         resp = requests.post(
             f'{SUPABASE_URL}/auth/v1/admin/users',
-            headers={
-                'apikey':        SUPABASE_SERVICE_KEY,
-                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
-                'Content-Type':  'application/json',
-            },
+            headers=_sb_headers(),
             json={
                 'email':          email,
                 'password':       password,
@@ -263,11 +259,11 @@ def api_register():
 # ─── ADMINISTRAÇÃO DE USUÁRIOS ────────────────────────────────
 
 def _sb_headers() -> dict:
-    return {
-        'apikey':        SUPABASE_SERVICE_KEY,
-        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
-        'Content-Type':  'application/json',
-    }
+    headers = {'apikey': SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json'}
+    # Chave legada (JWT service_role) também vai no Bearer; as novas (sb_secret_) só no apikey
+    if SUPABASE_SERVICE_KEY.startswith('eyJ'):
+        headers['Authorization'] = f'Bearer {SUPABASE_SERVICE_KEY}'
+    return headers
 
 
 def _now_iso() -> str:
@@ -289,7 +285,12 @@ def _require_admin():
             headers={'apikey': SUPABASE_SERVICE_KEY, 'Authorization': f'Bearer {token}'},
             timeout=10,
         )
-        email = (resp.json().get('email') or '').lower() if resp.ok else ''
+        if not resp.ok:
+            logger.warning('[admin] token recusado (%d): %s', resp.status_code, resp.text[:200])
+            msg = ('Chave SUPABASE_SERVICE_KEY inválida no servidor'
+                   if 'api key' in resp.text.lower() else 'Sessão inválida — saia e entre novamente')
+            return jsonify({'ok': False, 'error': msg}), 401
+        email = (resp.json().get('email') or '').lower()
     except Exception as exc:
         logger.error('[admin] validação do token: %s', exc)
         return jsonify({'ok': False, 'error': 'Falha ao validar sessão'}), 500
