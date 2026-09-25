@@ -31,9 +31,10 @@ FRONTEND_DIR = _BASE_DIR
 app = Flask(__name__, static_folder=FRONTEND_DIR)
 CORS(app)
 
-GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '')
-SUPABASE_URL        = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.co')
-SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
+# .strip(): valores colados no painel da Vercel podem vir com quebra de linha no fim
+GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '').strip()
+SUPABASE_URL        = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.co').strip().rstrip('/')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '').strip()
 ADMIN_EMAIL         = os.getenv('ADMIN_EMAIL', 'carolinelima313@gmail.com').strip().lower()
 
 _MAX_PAGES    = 2
