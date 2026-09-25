@@ -6,6 +6,9 @@ import requests
 import logging
 import time
 import os
+import secrets
+import string
+from datetime import datetime, timezone
 from typing import Optional
 
 try:
@@ -31,6 +34,7 @@ CORS(app)
 GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '')
 SUPABASE_URL        = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.co')
 SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
+ADMIN_EMAIL         = os.getenv('ADMIN_EMAIL', 'carolinelima313@gmail.com').strip().lower()
 
 _MAX_PAGES    = 2
 _TOKEN_DELAY  = 2.0
@@ -255,6 +259,161 @@ def api_register():
         return jsonify({'ok': False, 'error': str(exc)}), 500
 
 
+# ─── ADMINISTRAÇÃO DE USUÁRIOS ────────────────────────────────
+
+def _sb_headers() -> dict:
+    return {
+        'apikey':        SUPABASE_SERVICE_KEY,
+        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+        'Content-Type':  'application/json',
+    }
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _require_admin():
+    """Valida o token do Supabase enviado pelo navegador e confere se é a adm.
+    Retorna None se autorizado, ou a resposta de erro pronta."""
+    if not SUPABASE_SERVICE_KEY:
+        return jsonify({'ok': False, 'error': 'SUPABASE_SERVICE_KEY não configurada no servidor'}), 500
+    auth = request.headers.get('Authorization', '')
+    token = auth[7:] if auth.lower().startswith('bearer ') else ''
+    if not token:
+        return jsonify({'ok': False, 'error': 'Não autenticado'}), 401
+    try:
+        resp = requests.get(
+            f'{SUPABASE_URL}/auth/v1/user',
+            headers={'apikey': SUPABASE_SERVICE_KEY, 'Authorization': f'Bearer {token}'},
+            timeout=10,
+        )
+        email = (resp.json().get('email') or '').lower() if resp.ok else ''
+    except Exception as exc:
+        logger.error('[admin] validação do token: %s', exc)
+        return jsonify({'ok': False, 'error': 'Falha ao validar sessão'}), 500
+    if email != ADMIN_EMAIL:
+        return jsonify({'ok': False, 'error': 'Acesso restrito à administradora'}), 403
+    return None
+
+
+def _temp_password() -> str:
+    """Senha temporária que já atende à regra de senha do sistema."""
+    return (secrets.choice(string.ascii_uppercase)
+            + secrets.token_urlsafe(6).replace('-', 'x').replace('_', 'y')
+            + secrets.choice(string.digits) + '!')
+
+
+@app.route('/api/reset-request', methods=['POST'])
+def api_reset_request():
+    """Usuário (deslogado) pede reset de senha — fica pendente para a adm."""
+    data  = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    if not email or '@' not in email:
+        return jsonify({'ok': False, 'error': 'E-mail inválido'}), 400
+    if not SUPABASE_SERVICE_KEY:
+        return jsonify({'ok': False, 'error': 'SUPABASE_SERVICE_KEY não configurada no servidor'}), 500
+    try:
+        requests.patch(
+            f'{SUPABASE_URL}/rest/v1/user_access',
+            headers={**_sb_headers(), 'Prefer': 'return=minimal'},
+            params={'email': f'eq.{email}'},
+            json={'reset_requested_at': _now_iso()},
+            timeout=10,
+        )
+    except Exception as exc:
+        logger.error('[reset-request] %s', exc)
+        return jsonify({'ok': False, 'error': 'Erro ao registrar pedido'}), 500
+    # Resposta igual exista ou não o e-mail, para não revelar quem tem conta
+    return jsonify({'ok': True})
+
+
+@app.route('/api/admin-users')
+def api_admin_users():
+    err = _require_admin()
+    if err:
+        return err
+    resp = requests.get(
+        f'{SUPABASE_URL}/rest/v1/user_access',
+        headers=_sb_headers(),
+        params={'select': '*', 'order': 'created_at.desc'},
+        timeout=10,
+    )
+    if not resp.ok:
+        return jsonify({'ok': False, 'error': resp.text}), 500
+    return jsonify({'ok': True, 'users': resp.json()})
+
+
+def _target_user(user_id: str):
+    resp = requests.get(
+        f'{SUPABASE_URL}/rest/v1/user_access',
+        headers=_sb_headers(),
+        params={'select': 'user_id,email', 'user_id': f'eq.{user_id}'},
+        timeout=10,
+    )
+    rows = resp.json() if resp.ok else []
+    return rows[0] if rows else None
+
+
+@app.route('/api/admin-decide', methods=['POST'])
+def api_admin_decide():
+    err = _require_admin()
+    if err:
+        return err
+    data    = request.get_json(silent=True) or {}
+    user_id = (data.get('user_id') or '').strip()
+    status  = (data.get('status')  or '').strip()
+    if status not in ('aprovado', 'recusado'):
+        return jsonify({'ok': False, 'error': 'Status inválido'}), 400
+    target = _target_user(user_id) if user_id else None
+    if not target:
+        return jsonify({'ok': False, 'error': 'Usuário não encontrado'}), 404
+    if target['email'].lower() == ADMIN_EMAIL:
+        return jsonify({'ok': False, 'error': 'A conta da administradora não pode ser alterada'}), 400
+    resp = requests.patch(
+        f'{SUPABASE_URL}/rest/v1/user_access',
+        headers={**_sb_headers(), 'Prefer': 'return=minimal'},
+        params={'user_id': f'eq.{user_id}'},
+        json={'status': status, 'decided_at': _now_iso()},
+        timeout=10,
+    )
+    if not resp.ok:
+        return jsonify({'ok': False, 'error': resp.text}), 500
+    logger.info('[admin] %s -> %s', target['email'], status)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/admin-reset', methods=['POST'])
+def api_admin_reset():
+    """Define uma senha temporária e devolve para a adm repassar ao usuário."""
+    err = _require_admin()
+    if err:
+        return err
+    data    = request.get_json(silent=True) or {}
+    user_id = (data.get('user_id') or '').strip()
+    target  = _target_user(user_id) if user_id else None
+    if not target:
+        return jsonify({'ok': False, 'error': 'Usuário não encontrado'}), 404
+    password = _temp_password()
+    resp = requests.put(
+        f'{SUPABASE_URL}/auth/v1/admin/users/{user_id}',
+        headers=_sb_headers(),
+        json={'password': password},
+        timeout=10,
+    )
+    if not resp.ok:
+        return jsonify({'ok': False, 'error': resp.text}), 500
+    requests.patch(
+        f'{SUPABASE_URL}/rest/v1/user_access',
+        headers={**_sb_headers(), 'Prefer': 'return=minimal'},
+        params={'user_id': f'eq.{user_id}'},
+        json={'reset_requested_at': None},
+        timeout=10,
+    )
+    logger.info('[admin] senha resetada: %s', target['email'])
+    return jsonify({'ok': True, 'password': password})
+
+
 @app.route('/api/buscar')
 def api_buscar():
     uf          = request.args.get('uf',          '').strip().upper()
@@ -307,6 +466,14 @@ def api_dispatch():
         return api_details()
     if action == 'register':
         return api_register()
+    if action == 'reset-request':
+        return api_reset_request()
+    if action == 'admin-users':
+        return api_admin_users()
+    if action == 'admin-decide':
+        return api_admin_decide()
+    if action == 'admin-reset':
+        return api_admin_reset()
     return jsonify({'error': 'ação desconhecida'}), 404
 
 

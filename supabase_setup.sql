@@ -179,3 +179,49 @@ CREATE POLICY search_history_own ON search_history
   FOR ALL TO authenticated
   USING      (user_email = auth.jwt() ->> 'email')
   WITH CHECK (user_email = auth.jwt() ->> 'email');
+
+-- ──────────────────────────────────────────────────────────────
+-- 6. Aprovação de cadastro pela administradora
+--    Todo novo usuário entra como 'pendente' e só acessa o sistema
+--    depois de aprovado. Escritas só via backend (service key).
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.user_access (
+  user_id            UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email              TEXT        NOT NULL UNIQUE,
+  name               TEXT,
+  status             TEXT        NOT NULL DEFAULT 'pendente'
+                                 CHECK (status IN ('pendente','aprovado','recusado')),
+  reset_requested_at TIMESTAMPTZ,
+  decided_at         TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_access ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_access_read_own ON public.user_access;
+CREATE POLICY user_access_read_own ON public.user_access
+  FOR SELECT TO authenticated
+  USING (email = auth.jwt() ->> 'email');
+
+CREATE OR REPLACE FUNCTION public.create_user_access()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.user_access (user_id, email, name, status)
+  VALUES (
+    NEW.id, NEW.email, NEW.raw_user_meta_data ->> 'name',
+    CASE WHEN lower(NEW.email) = 'carolinelima313@gmail.com' THEN 'aprovado' ELSE 'pendente' END
+  )
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_create_user_access ON auth.users;
+CREATE TRIGGER trg_create_user_access
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.create_user_access();
+
+-- Usuários que já existiam antes desta etapa ficam aprovados
+INSERT INTO public.user_access (user_id, email, name, status, decided_at)
+SELECT id, email, raw_user_meta_data ->> 'name', 'aprovado', NOW()
+FROM auth.users
+ON CONFLICT (user_id) DO NOTHING;

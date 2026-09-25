@@ -50,6 +50,7 @@
       <button class="bp" onclick="doAuth()" id="abtn">Entrar</button>
       <div class="divider">ou</div>
       <button class="bgh" id="tgbtn" onclick="tgAuth()">Criar conta grátis</button>
+      <div id="forgotw" style="text-align:center;margin-top:.8rem"><a href="#" onclick="forgotPassword();return false" style="font-size:12px;color:var(--txt3)">Esqueci minha senha</a></div>
       <div class="errt" id="aerr"></div>
     </div>
   </div>
@@ -104,6 +105,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar CSV
       </div>
+      <div class="drawer-ni" id="dna" onclick="go('a');closeDrawer()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Administração <span class="adm-count"></span>
+      </div>
     </div>
     <div class="drawer-foot">
       <button class="btn-theme" onclick="toggleTheme()" style="width:100%;border-radius:8px;padding:10px;font-size:13px;margin-bottom:8px;justify-content:center;gap:8px">🌙 Alternar tema</button>
@@ -138,6 +143,9 @@
         <div class="ni" id="ne" onclick="go('e')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exportar CSV
         </div>
+        <div class="ni" id="na" onclick="go('a')" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Administração <span class="adm-count"></span>
+        </div>
       </nav>
       <div class="side-theme-row">
         <button class="btn-theme" onclick="toggleTheme()">☀️</button>
@@ -171,6 +179,10 @@
       <div class="bnav-item" id="bne" onclick="go('e')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         CSV
+      </div>
+      <div class="bnav-item" id="bna" onclick="go('a')" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Adm
       </div>
     </div>
   </div>
@@ -255,6 +267,8 @@ const CACHE_TTL_DAYS = 7;
 let sb = null;
 let user = null, signup = false, ctab = 'b';
 let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'todos';
+const ADMIN_EMAIL = 'carolinelima313@gmail.com';
+const isAdmin = () => !!user && user.email.toLowerCase() === ADMIN_EMAIL;
 let cacheCtx = null; // { key, uf, cid } da busca atual — usado para salvar contatos carregados
 let searchMode = 'vendedores';
 let theme = localStorage.getItem('al_theme') || 'dark';
@@ -276,6 +290,7 @@ const STATUS_MAP = {
 // ─── HELPERS ──────────────────────────────────────────────────
 const g = id => document.getElementById(id);
 const setErr = m => { const el=g('aerr'); el.textContent=m; el.style.display='block'; el.style.color=''; el.style.background=''; el.style.border=''; };
+const setOk = m => { const el=g('aerr'); el.textContent=m; el.style.display='block'; el.style.color='var(--green)'; el.style.background='rgba(34,197,94,.08)'; el.style.border='1px solid rgba(34,197,94,.25)'; };
 const clrErr = () => { const el=g('aerr'); el.style.display='none'; el.style.color=''; el.style.background=''; el.style.border=''; };
 
 // ─── INIT ─────────────────────────────────────────────────────
@@ -331,7 +346,22 @@ function tgAuth() {
   g('ifw').style.display = signup ? 'block' : 'none';
   g('ip2w').style.display = signup ? 'block' : 'none';
   g('pw-hint').style.display = signup ? 'block' : 'none';
+  g('forgotw').style.display = signup ? 'none' : 'block';
   clrErr();
+}
+
+async function forgotPassword() {
+  const e = g('ie').value.trim();
+  if (!e || !e.includes('@')) { setErr('Digite seu e-mail no campo acima e clique em "Esqueci minha senha" de novo.'); return; }
+  try {
+    const r = await fetch('/api/reset-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: e }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!d.ok) throw new Error(d.error || 'Erro ao enviar pedido');
+    setOk('Pedido enviado! A administradora vai resetar sua senha e te passar uma senha temporária.');
+  } catch(err) { setErr(err.message || 'Erro ao enviar pedido. Tente novamente.'); }
 }
 
 function validatePassword(p) {
@@ -381,10 +411,10 @@ async function doAuth() {
         }
       }
       if (regOk) {
-        // Login imediato com a conta criada e já confirmada pelo backend
-        const { data: sd, error: se } = await sb.auth.signInWithPassword({ email: e, password: p });
-        if (se) throw se;
-        enterApp(sd.user);
+        // Conta criada como 'pendente' — só entra depois da aprovação da adm
+        tgAuth();
+        g('ie').value = e;
+        setOk('Cadastro enviado! Aguarde a aprovação da administradora para acessar o sistema.');
       }
     } else {
       btn.textContent = 'Entrando...';
@@ -404,7 +434,26 @@ async function doAuth() {
   }
 }
 
+// Todo cadastro novo entra como 'pendente' (trigger no Supabase) até a adm aprovar.
+async function checkAccess(authUser) {
+  if ((authUser.email || '').toLowerCase() === ADMIN_EMAIL) return 'aprovado';
+  try {
+    const { data, error } = await sb.from('user_access')
+      .select('status').eq('user_id', authUser.id).maybeSingle();
+    if (error) throw error;
+    return data ? data.status : 'pendente';
+  } catch(e) { console.warn('[access]', e); return 'erro'; }
+}
+
 async function enterApp(authUser) {
+  const access = await checkAccess(authUser);
+  if (access !== 'aprovado') {
+    await logout();
+    setErr(access === 'recusado' ? 'Seu cadastro foi recusado. Fale com a administradora do sistema.'
+         : access === 'erro'     ? 'Não foi possível verificar seu acesso. Tente novamente.'
+         : 'Seu cadastro está aguardando aprovação da administradora.');
+    return;
+  }
   const name = (authUser.user_metadata && authUser.user_metadata.name)
     ? authUser.user_metadata.name
     : authUser.email.split('@')[0].replace(/[._-]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -419,6 +468,9 @@ async function enterApp(authUser) {
   if (g('semail')) g('semail').textContent = user.email;
   if (g('drawer-nm')) g('drawer-nm').textContent = n;
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
+  const isAdm = isAdmin();
+  ['na','dna','bna'].forEach(id => { const el = g(id); if (el) el.style.display = isAdm ? '' : 'none'; });
+  if (isAdm) refreshAdminCount();
   loadFavs();
   loadDailyLimits();
   loadStores().then(list => {
@@ -500,7 +552,7 @@ async function logout() {
 }
 
 // ─── NAVEGAÇÃO ────────────────────────────────────────────────
-const TABS = ['b','f','h','e','s'];
+const TABS = ['b','f','h','e','s','a'];
 function go(t) {
   ctab = t;
   TABS.forEach(x => ['n','dn','bn'].forEach(p => { const el = g(p+x); if(el) el.classList.toggle('on', x===t); }));
@@ -513,6 +565,100 @@ function render() {
   else if (ctab==='h') pHist(c);
   else if (ctab==='e') pExp(c);
   else if (ctab==='s') pStores(c);
+  else if (ctab==='a' && isAdmin()) pAdmin(c);
+}
+
+// ─── ADMINISTRAÇÃO (só a adm) ─────────────────────────────────
+// As permissões são checadas de novo no servidor — esconder a aba é só visual.
+async function adminApi(path, body) {
+  const { data: { session } } = await sb.auth.getSession();
+  const r = await fetch('/api/' + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session?.access_token || '') },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!d.ok) throw new Error(d.error || 'Erro no servidor (' + r.status + ')');
+  return d;
+}
+
+async function refreshAdminCount() {
+  try {
+    const { users } = await adminApi('admin-users');
+    updateAdminCount(users);
+  } catch(e) { console.warn('[admin] contagem:', e); }
+}
+function updateAdminCount(users) {
+  const n = users.filter(u => u.status === 'pendente' || u.reset_requested_at).length;
+  document.querySelectorAll('.adm-count').forEach(el => {
+    el.innerHTML = n ? `<span class="badge-yel" style="padding:1px 7px;margin-left:4px">${n}</span>` : '';
+  });
+}
+
+const escH = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const fmtDt = iso => iso ? new Date(iso).toLocaleString('pt-BR') : '—';
+
+async function pAdmin(c) {
+  c.innerHTML = `
+    <div class="page-header"><h1>Administração</h1><p>Aprove ou recuse novos cadastros e resete senhas de quem pediu</p></div>
+    <div id="adm-content"><div class="ld"><div class="spin"></div><div style="color:var(--txt2)">Carregando...</div></div></div>`;
+  let users;
+  try { ({ users } = await adminApi('admin-users')); }
+  catch(e) {
+    const el = g('adm-content');
+    if (el) el.innerHTML = `<div class="empty"><div class="ei">⚠️</div><p style="color:var(--red);font-weight:700">Erro ao carregar usuários</p><small>${escH(e.message)}</small></div>`;
+    return;
+  }
+  const el = g('adm-content'); if (!el) return;
+  updateAdminCount(users);
+
+  const pend   = users.filter(u => u.status === 'pendente');
+  const resets = users.filter(u => u.reset_requested_at && u.status === 'aprovado');
+  const others = users.filter(u => u.status !== 'pendente');
+  const badge  = s => s === 'aprovado' ? '<span class="badge-ok">✅ Aprovado</span>'
+                    : s === 'recusado' ? '<span class="badge-bad">🚫 Recusado</span>'
+                    : '<span class="badge-yel">⏳ Pendente</span>';
+  const isSelf = u => (u.email || '').toLowerCase() === ADMIN_EMAIL;
+  const row = (u, actions) => `
+    <div class="search-panel" style="padding:.8rem 1rem;margin-bottom:.6rem;display:flex;flex-wrap:wrap;align-items:center;gap:.6rem">
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:700;color:var(--txt)">${escH(u.name || u.email.split('@')[0])}</div>
+        <div style="font-size:12px;color:var(--txt2)">${escH(u.email)}</div>
+        <div style="font-size:11px;color:var(--txt3)">Cadastro: ${fmtDt(u.created_at)}${u.reset_requested_at ? ' · Pediu reset: ' + fmtDt(u.reset_requested_at) : ''}</div>
+      </div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">${actions}</div>
+    </div>`;
+  const btnOk    = u => `<button class="ab" style="color:var(--green);border-color:rgba(34,197,94,.3)" onclick="admDecide('${u.user_id}','aprovado')">✅ Aceitar</button>`;
+  const btnNo    = u => `<button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="admDecide('${u.user_id}','recusado')">🚫 Recusar</button>`;
+  const btnReset = u => `<button class="ab" onclick="admReset('${u.user_id}','${escH(u.email)}')">🔑 Resetar senha</button>`;
+  const section  = (title, list, empty, fn) => `
+    <h3 style="font-size:14px;margin:1.2rem 0 .6rem;color:var(--txt)">${title} (${list.length})</h3>
+    ${list.length ? list.map(fn).join('') : `<div style="font-size:12px;color:var(--txt3);margin-bottom:.6rem">${empty}</div>`}`;
+
+  el.innerHTML =
+    section('⏳ Aguardando aprovação', pend, 'Nenhum cadastro pendente.', u => row(u, btnOk(u) + btnNo(u))) +
+    section('🔑 Pedidos de reset de senha', resets, 'Nenhum pedido de reset.', u => row(u, btnReset(u))) +
+    section('👥 Todos os usuários', others, 'Nenhum usuário.', u => row(u,
+      badge(u.status) + (isSelf(u) ? '' :
+        (u.status === 'aprovado' ? btnNo(u) + btnReset(u) : btnOk(u)))));
+}
+
+async function admDecide(userId, status) {
+  if (status === 'recusado' && !confirm('Recusar este usuário? Ele não vai conseguir acessar o sistema.')) return;
+  try {
+    await adminApi('admin-decide', { user_id: userId, status });
+    showToast(status === 'aprovado' ? 'Usuário aprovado!' : 'Usuário recusado.');
+    if (ctab === 'a') render();
+  } catch(e) { showToast('Erro: ' + e.message, 'red'); }
+}
+
+async function admReset(userId, email) {
+  if (!confirm(`Resetar a senha de ${email}? A senha atual deixa de funcionar.`)) return;
+  try {
+    const { password } = await adminApi('admin-reset', { user_id: userId });
+    prompt(`Nova senha temporária de ${email}.\nCopie e envie para o usuário:`, password);
+    if (ctab === 'a') render();
+  } catch(e) { showToast('Erro: ' + e.message, 'red'); }
 }
 
 // ─── PÁGINA DE BUSCA ──────────────────────────────────────────
