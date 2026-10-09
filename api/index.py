@@ -416,6 +416,114 @@ def api_admin_reset():
     return jsonify({'ok': True, 'password': password})
 
 
+# ─── CNPJ ─────────────────────────────────────────────────────
+# Consulta as bases públicas gratuitas em paralelo e devolve a primeira resposta
+# válida. Feito no servidor para não depender de proxies CORS (instáveis).
+
+def _cnpj_brasilapi(d: dict) -> dict:
+    tel = f"({d['ddd_telefone_1'][:2]}) {d['ddd_telefone_1'][2:]}" if d.get('ddd_telefone_1') else ''
+    return {
+        'razao_social': d.get('razao_social') or '', 'nome_fantasia': d.get('nome_fantasia') or '',
+        'situacao': d.get('descricao_situacao_cadastral') or '',
+        'data_inicio_atividade': d.get('data_inicio_atividade') or '',
+        'municipio': d.get('municipio') or '', 'uf': d.get('uf') or '', 'telefone': tel,
+        'cnae': d.get('cnae_fiscal_descricao') or '', 'cnae_code': str(d.get('cnae_fiscal') or ''),
+        'porte': d.get('porte') or '',
+        'natureza': (d.get('natureza_juridica') or '').split(' - ')[0],
+        'is_mei': d.get('opcao_pelo_mei') is True,
+    }
+
+
+def _cnpj_receitaws(d: dict) -> Optional[dict]:
+    if not d.get('nome') or d.get('status') == 'ERROR':
+        return None
+    ativ = (d.get('atividade_principal') or [{}])[0]
+    abertura = d.get('abertura') or ''
+    nat = d.get('natureza_juridica') or ''
+    return {
+        'razao_social': d.get('nome') or '', 'nome_fantasia': d.get('fantasia') or '',
+        'situacao': d.get('situacao') or '',
+        'data_inicio_atividade': '-'.join(reversed(abertura.split('/'))) if abertura else '',
+        'municipio': d.get('municipio') or '', 'uf': d.get('uf') or '', 'telefone': d.get('telefone') or '',
+        'cnae': ativ.get('text') or '', 'cnae_code': ''.join(ch for ch in (ativ.get('code') or '') if ch.isdigit()),
+        'porte': d.get('porte') or '', 'natureza': nat,
+        'is_mei': ((d.get('simei') or {}).get('optante') is True) or 'microempreendedor' in nat.lower(),
+    }
+
+
+def _cnpj_cnpja(d: dict) -> Optional[dict]:
+    comp = d.get('company') or {}
+    if not comp.get('name'):
+        return None
+    addr = d.get('address') or {}
+    phones = d.get('phones') or []
+    tel = f"({phones[0].get('area', '')}) {phones[0].get('number', '')}" if phones else ''
+    ativ = d.get('mainActivity') or {}
+    return {
+        'razao_social': comp.get('name') or '', 'nome_fantasia': d.get('alias') or '',
+        'situacao': (d.get('status') or {}).get('text') or '',
+        'data_inicio_atividade': d.get('founded') or '',
+        'municipio': addr.get('city') or '', 'uf': addr.get('state') or '', 'telefone': tel,
+        'cnae': ativ.get('text') or '', 'cnae_code': str(ativ.get('id') or ''),
+        'porte': (comp.get('size') or {}).get('text') or '',
+        'natureza': (comp.get('nature') or {}).get('text') or '',
+        'is_mei': (comp.get('simei') or {}).get('optant') is True,
+    }
+
+
+_CNPJ_SOURCES = [
+    ('brasilapi', 'https://brasilapi.com.br/api/cnpj/v1/{}', _cnpj_brasilapi),
+    ('receitaws', 'https://receitaws.com.br/v1/cnpj/{}',     _cnpj_receitaws),
+    ('cnpja',     'https://open.cnpja.com/office/{}',        _cnpj_cnpja),
+]
+
+
+def _cnpj_fetch(name: str, url: str, parse, cnpj: str):
+    """Retorna (dados | None, 'not_found' | 'erro')."""
+    try:
+        resp = requests.get(url.format(cnpj), timeout=8,
+                            headers={'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code in (400, 404):
+            return None, 'not_found'
+        if not resp.ok:
+            logger.warning('[cnpj] %s HTTP %d', name, resp.status_code)
+            return None, 'erro'
+        data = parse(resp.json())
+        if data and data['razao_social']:
+            return data, None
+        return None, 'not_found'
+    except Exception as exc:
+        logger.warning('[cnpj] %s falhou: %s', name, exc)
+        return None, 'erro'
+
+
+@app.route('/api/cnpj')
+def api_cnpj():
+    cnpj = ''.join(ch for ch in request.args.get('cnpj', '') if ch.isdigit())
+    if len(cnpj) != 14:
+        return jsonify({'ok': False, 'error': 'CNPJ precisa ter 14 dígitos'}), 400
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    pool = ThreadPoolExecutor(max_workers=len(_CNPJ_SOURCES))
+    futures = {pool.submit(_cnpj_fetch, n, u, p, cnpj): n for n, u, p in _CNPJ_SOURCES}
+    motivos = []
+    try:
+        for fut in as_completed(futures, timeout=10):
+            data, motivo = fut.result()
+            if data:
+                logger.info('[cnpj] %s respondido por %s', cnpj, futures[fut])
+                return jsonify({'ok': True, 'source': futures[fut], 'data': data})
+            motivos.append(motivo)
+    except Exception:
+        pass  # timeout geral — trata abaixo
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)  # não espera as fontes lentas
+
+    if motivos and all(m == 'not_found' for m in motivos) and len(motivos) == len(_CNPJ_SOURCES):
+        return jsonify({'ok': False, 'error': 'CNPJ não encontrado. Verifique o número.'}), 404
+    return jsonify({'ok': False, 'error': 'Serviços de CNPJ indisponíveis no momento. Tente novamente em instantes.'}), 502
+
+
 @app.route('/api/buscar')
 def api_buscar():
     uf          = request.args.get('uf',          '').strip().upper()
@@ -468,6 +576,8 @@ def api_dispatch():
         return api_details()
     if action == 'register':
         return api_register()
+    if action == 'cnpj':
+        return api_cnpj()
     if action == 'reset-request':
         return api_reset_request()
     if action == 'admin-users':
