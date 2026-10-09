@@ -246,8 +246,9 @@
 
 </div><!-- #app -->
 
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+<!-- Versão fixa + SRI: se o arquivo do CDN for alterado, o navegador recusa carregar -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
@@ -289,6 +290,18 @@ const STATUS_MAP = {
 
 // ─── HELPERS ──────────────────────────────────────────────────
 const g = id => document.getElementById(id);
+// Chamadas ao nosso backend levam o token do Supabase (o servidor exige login aprovado)
+async function authHeaders() {
+  try { const { data: { session } } = await sb.auth.getSession(); return session ? { 'Authorization': 'Bearer ' + session.access_token } : {}; }
+  catch(e) { return {}; }
+}
+// Escapa texto vindo de fora (Google, bases de CNPJ, usuário) antes de ir para innerHTML
+const escH = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+// Para argumentos de onclick="fn('...')": remove aspas/barras e escapa o resto
+const escJs = s => escH(String(s ?? '').replace(/['"\\`]/g, ''));
+// Só aceita links http(s) — bloqueia javascript: e afins
+const safeUrl = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch(e) { return ''; } };
+const linkBtn = (u, label) => { const v = safeUrl(u); return v ? `<a class="ab" style="text-decoration:none" href="${escH(v)}" target="_blank" rel="noopener noreferrer">${label}</a>` : ''; };
 const setErr = m => { const el=g('aerr'); el.textContent=m; el.style.display='block'; el.style.color=''; el.style.background=''; el.style.border=''; };
 const setOk = m => { const el=g('aerr'); el.textContent=m; el.style.display='block'; el.style.color='var(--green)'; el.style.background='rgba(34,197,94,.08)'; el.style.border='1px solid rgba(34,197,94,.25)'; };
 const clrErr = () => { const el=g('aerr'); el.style.display='none'; el.style.color=''; el.style.background=''; el.style.border=''; };
@@ -596,7 +609,6 @@ function updateAdminCount(users) {
   });
 }
 
-const escH = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmtDt = iso => iso ? new Date(iso).toLocaleString('pt-BR') : '—';
 
 async function pAdmin(c) {
@@ -629,9 +641,9 @@ async function pAdmin(c) {
       </div>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">${actions}</div>
     </div>`;
-  const btnOk    = u => `<button class="ab" style="color:var(--green);border-color:rgba(34,197,94,.3)" onclick="admDecide('${u.user_id}','aprovado')">✅ Aceitar</button>`;
-  const btnNo    = u => `<button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="admDecide('${u.user_id}','recusado')">🚫 Recusar</button>`;
-  const btnReset = u => `<button class="ab" onclick="admReset('${u.user_id}','${escH(u.email)}')">🔑 Resetar senha</button>`;
+  const btnOk    = u => `<button class="ab" style="color:var(--green);border-color:rgba(34,197,94,.3)" onclick="admDecide('${escJs(u.user_id)}','aprovado')">✅ Aceitar</button>`;
+  const btnNo    = u => `<button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="admDecide('${escJs(u.user_id)}','recusado')">🚫 Recusar</button>`;
+  const btnReset = u => `<button class="ab" onclick="admReset('${escJs(u.user_id)}','${escJs(u.email)}')">🔑 Resetar senha</button>`;
   const section  = (title, list, empty, fn) => `
     <h3 style="font-size:14px;margin:1.2rem 0 .6rem;color:var(--txt)">${title} (${list.length})</h3>
     ${list.length ? list.map(fn).join('') : `<div style="font-size:12px;color:var(--txt3);margin-bottom:.6rem">${empty}</div>`}`;
@@ -836,7 +848,7 @@ async function loadFavs() {
 async function apiBuscarTermo(uf, cidade, termo) {
   const params = new URLSearchParams({ uf, query: termo });
   if (cidade) params.set('cidade', cidade);
-  const r = await fetch('/api/buscar?' + params);
+  const r = await fetch('/api/buscar?' + params, { headers: await authHeaders() });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.error || 'Erro no servidor (' + r.status + ')');
@@ -848,7 +860,7 @@ async function apiBuscarTermo(uf, cidade, termo) {
 }
 async function apiDetails(placeId) {
   try {
-    const r = await fetch('/api/details?place_id=' + encodeURIComponent(placeId));
+    const r = await fetch('/api/details?place_id=' + encodeURIComponent(placeId), { headers: await authHeaders() });
     if (!r.ok) return null;
     const d = await r.json();
     if (d.status !== 'OK' || !d.result) return null;
@@ -1113,15 +1125,15 @@ function mkCard(co) {
     : `<div class="cc-no-since" id="abe_${idx}">📅 Data de abertura — consulte o CNPJ</div>`;
 
   const phoneHtml = co.telefone
-    ? `<div class="cc-phone">📞 ${co.telefone}</div>`
+    ? `<div class="cc-phone">📞 ${escH(co.telefone)}</div>`
     : co._detailsLoaded
       ? `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não disponível</div>`
       : `<div class="cc-phone" style="color:var(--txt3);font-size:11px">⌛ Carregando contato...</div>`;
 
   const mapsBtn = co.gmaps_url
-    ? `<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>`
-    : co.lat ? `<button class="ab" onclick="openMap(${co.lat},${co.lon})">🗺 Mapa</button>` : '';
-  const siteBtn = co.website ? `<button class="ab" onclick="window.open('${co.website}','_blank')">🌐 Site</button>` : '';
+    ? linkBtn(co.gmaps_url, '🗺 Maps')
+    : co.lat ? `<button class="ab" onclick="openMap(${+co.lat},${+co.lon})">🗺 Mapa</button>` : '';
+  const siteBtn = linkBtn(co.website, '🌐 Site');
   const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wppIdx(${idx})">💬 WhatsApp</button>` : '';
 
   const leadBadge = co._isNovo
@@ -1133,12 +1145,12 @@ function mkCard(co) {
 
   d.innerHTML = `
     <div class="cc-top">
-      <div class="cc-name">${co.nome}</div>
-      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${co.avaliacao}</div></div>
+      <div class="cc-name">${escH(co.nome)}</div>
+      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${escH(co.avaliacao)}</div></div>
     </div>
     ${leadBadge || co._novaBusca ? `<div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap">${co._novaBusca ? `<span class="badge-nova" title="Não apareceu na pesquisa de ${new Date(co._novaDesde).toLocaleDateString('pt-BR')}">✨ Nova nesta busca</span>` : ''}${leadBadge}</div>` : ''}
-    <div class="cc-type">${co.tipo}</div>
-    <div class="cc-addr">📍 ${co.endereco}${co.cidade?', '+co.cidade:''}${co.uf?'/'+co.uf:''}</div>
+    <div class="cc-type">${escH(co.tipo)}</div>
+    <div class="cc-addr">📍 ${escH(co.endereco)}${co.cidade?', '+escH(co.cidade):''}${co.uf?'/'+escH(co.uf):''}</div>
     ${phoneHtml}
     ${aHTML}
     <hr class="cc-sep"/>
@@ -1262,7 +1274,7 @@ async function bCNPJCard(idx) {
       co._isNovo      = isNovo;
     }
     const ok = (d.situacao||'').toLowerCase().includes('ativa');
-    const situBadge = ok ? '<span class="badge-ok">● Ativa</span>' : `<span class="badge-bad">● ${d.situacao||'Inativa'}</span>`;
+    const situBadge = ok ? '<span class="badge-ok">● Ativa</span>' : `<span class="badge-bad">● ${escH(d.situacao||'Inativa')}</span>`;
     res.innerHTML = `
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
         ${situBadge}
@@ -1271,7 +1283,7 @@ async function bCNPJCard(idx) {
       </div>
       <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${lead.msg}</div>
       <strong>${fmtData(d.data_inicio_atividade)}</strong> · ${calcIdade(d.data_inicio_atividade)}<br>
-      <span style="font-size:10px;color:var(--txt3)">${d.razao_social||''} · Porte: ${d.porte||'—'} · CNAE: ${d.cnae_code||'—'} ${d.cnae?'('+d.cnae.substring(0,45)+')':''}</span>`;
+      <span style="font-size:10px;color:var(--txt3)">${escH(d.razao_social)} · Porte: ${escH(d.porte||'—')} · CNAE: ${escH(d.cnae_code||'—')} ${d.cnae?'('+escH(d.cnae.substring(0,45))+')':''}</span>`;
     const abeEl = g('abe_'+idx);
     if (abeEl && d.data_inicio_atividade) abeEl.outerHTML = `<div class="cc-since">📅 Aberta desde ${fmtData(d.data_inicio_atividade)} · ${calcIdade(d.data_inicio_atividade)}</div>`;
     const cbtn = g('cbtn_'+idx);
@@ -1284,7 +1296,7 @@ async function bCNPJCard(idx) {
       if (cardEl) cardEl.replaceWith(mkCard(co));
     }
   } catch(e) {
-    res.innerHTML = `<span style="color:var(--red)">⚠ ${e.message || 'CNPJ não encontrado. Verifique o número.'}</span>`;
+    res.innerHTML = `<span style="color:var(--red)">⚠ ${escH(e.message || 'CNPJ não encontrado. Verifique o número.')}</span>`;
   }
 }
 async function qCNPJ() {
@@ -1298,38 +1310,38 @@ async function qCNPJ() {
     const ok = (d.situacao||'').toLowerCase().includes('ativa');
     r.innerHTML = `
       <div class="cnpj-card">
-        <div class="razao">${d.razao_social||'—'}</div>
-        ${d.nome_fantasia?`<div style="font-size:12px;color:var(--txt2);margin-bottom:.5rem">${d.nome_fantasia}</div>`:''}
+        <div class="razao">${escH(d.razao_social||'—')}</div>
+        ${d.nome_fantasia?`<div style="font-size:12px;color:var(--txt2);margin-bottom:.5rem">${escH(d.nome_fantasia)}</div>`:''}
         <div style="margin-bottom:.8rem;display:flex;flex-wrap:wrap;gap:5px">
-          ${ok?'<span class="badge-ok">● Ativa</span>':`<span class="badge-bad">● ${d.situacao||'Inativa'}</span>`}
+          ${ok?'<span class="badge-ok">● Ativa</span>':`<span class="badge-bad">● ${escH(d.situacao||'Inativa')}</span>`}
           ${(()=>{ const l=validateLead(d); return `<span class="${l.cls}">${l.label}</span>`; })()}
           ${isWithin24Months(d.data_inicio_atividade)?'<span class="badge-novo">🆕 Lead Novo</span>':''}
-          ${d.natureza?`<span class="badge-yel">${d.natureza}</span>`:''}
+          ${d.natureza?`<span class="badge-yel">${escH(d.natureza)}</span>`:''}
         </div>
         <div class="cnpj-grid">
           <div class="cnpj-item"><div class="k">📅 Data de Abertura</div><div class="v" style="color:var(--green);font-weight:700">${d.data_inicio_atividade?fmtData(d.data_inicio_atividade):'Não informado'}</div></div>
           <div class="cnpj-item"><div class="k">⏳ Tempo de atividade</div><div class="v">${calcIdade(d.data_inicio_atividade)}</div></div>
-          <div class="cnpj-item"><div class="k">🏙 Município</div><div class="v">${d.municipio||'—'} / ${d.uf||'—'}</div></div>
-          <div class="cnpj-item"><div class="k">📞 Telefone</div><div class="v">${d.telefone||'—'}</div></div>
-          <div class="cnpj-item"><div class="k">📂 CNAE</div><div class="v" style="font-size:10px">${d.cnae||'—'}</div></div>
-          <div class="cnpj-item"><div class="k">🏢 Porte</div><div class="v">${d.porte||'—'}</div></div>
+          <div class="cnpj-item"><div class="k">🏙 Município</div><div class="v">${escH(d.municipio||'—')} / ${escH(d.uf||'—')}</div></div>
+          <div class="cnpj-item"><div class="k">📞 Telefone</div><div class="v">${escH(d.telefone||'—')}</div></div>
+          <div class="cnpj-item"><div class="k">📂 CNAE</div><div class="v" style="font-size:10px">${escH(d.cnae||'—')}</div></div>
+          <div class="cnpj-item"><div class="k">🏢 Porte</div><div class="v">${escH(d.porte||'—')}</div></div>
         </div>
       </div>`;
   } catch(e) {
-    r.innerHTML = `<div style="color:var(--red);font-size:12px;padding:.5rem">⚠ ${e.message || 'CNPJ não encontrado ou serviço indisponível. Tente novamente.'}</div>`;
+    r.innerHTML = `<div style="color:var(--red);font-size:12px;padding:.5rem">⚠ ${escH(e.message || 'CNPJ não encontrado ou serviço indisponível. Tente novamente.')}</div>`;
   }
   btn.disabled = false; btn.textContent = 'Consultar';
 }
 // Consulta pelo servidor (/api/cnpj), que pergunta às bases públicas gratuitas
 // em paralelo. Se o servidor falhar, tenta a BrasilAPI direto do navegador.
 async function fetchCNPJ(raw) {
-  const timed = (url, ms) => {
+  const timed = (url, ms, extra = {}) => {
     const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
-    return fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal }).finally(() => clearTimeout(t));
+    return fetch(url, { headers: { 'Accept': 'application/json', ...extra }, signal: ctrl.signal }).finally(() => clearTimeout(t));
   };
   let serverErr = null;
   try {
-    const r = await timed('/api/cnpj?cnpj=' + raw, 15000);
+    const r = await timed('/api/cnpj?cnpj=' + raw, 15000, await authHeaders());
     const d = await r.json().catch(() => ({}));
     if (d.ok && d.data) return d.data;
     if (r.status === 404 || r.status === 400) throw Object.assign(new Error(d.error || 'CNPJ não encontrado. Verifique o número.'), { final: true });
@@ -1385,23 +1397,23 @@ function mkFavCard(co) {
   const d = document.createElement('div'); d.className = 'cc';
   const rat = parseFloat(co.avaliacao) || 0;
   const st = '★'.repeat(Math.round(rat)) + '☆'.repeat(5 - Math.round(rat));
-  const pid = (co.id || '').replace(/'/g, '');
+  const pid = escJs(co.id);
   const phoneHtml = co.telefone
-    ? `<div class="cc-phone">📞 ${co.telefone}</div>`
+    ? `<div class="cc-phone">📞 ${escH(co.telefone)}</div>`
     : `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Sem telefone registrado</div>`;
   const aHTML = co.abertura
     ? `<div class="cc-since">📅 Aberta desde ${fmtData(co.abertura)} · ${calcIdade(co.abertura)}</div>`
     : '';
-  const mapsBtn = co.gmaps_url ? `<button class="ab" onclick="window.open('${co.gmaps_url}','_blank')">🗺 Maps</button>` : '';
-  const siteBtn = co.website ? `<button class="ab" onclick="window.open('${co.website}','_blank')">🌐 Site</button>` : '';
-  const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wpp('${co.telefone.replace(/'/g,'').replace(/"/g,'')}','${co.nome.replace(/'/g,'').replace(/"/g,'')}')">💬 WhatsApp</button>` : '';
+  const mapsBtn = linkBtn(co.gmaps_url, '🗺 Maps');
+  const siteBtn = linkBtn(co.website, '🌐 Site');
+  const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wpp('${escJs(co.telefone)}','${escJs(co.nome)}')">💬 WhatsApp</button>` : '';
   d.innerHTML = `
     <div class="cc-top">
-      <div class="cc-name">${co.nome}</div>
-      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${co.avaliacao}</div></div>
+      <div class="cc-name">${escH(co.nome)}</div>
+      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${escH(co.avaliacao)}</div></div>
     </div>
-    <div class="cc-type">${co.tipo || ''}</div>
-    <div class="cc-addr">📍 ${co.endereco || ''}${co.cidade?', '+co.cidade:''}${co.uf?'/'+co.uf:''}</div>
+    <div class="cc-type">${escH(co.tipo)}</div>
+    <div class="cc-addr">📍 ${escH(co.endereco)}${co.cidade?', '+escH(co.cidade):''}${co.uf?'/'+escH(co.uf):''}</div>
     ${phoneHtml}${aHTML}
     <hr class="cc-sep"/>
     <div class="cacts">
@@ -1438,9 +1450,9 @@ async function pHist(c) {
   window._histData = supaHist;
 
   const states = [...new Set(supaHist.map(h => h.state).filter(Boolean))].sort();
-  const stateOpts = '<option value="">Todos os estados</option>' + states.map(s => `<option value="${s}">${s}</option>`).join('');
+  const stateOpts = '<option value="">Todos os estados</option>' + states.map(s => `<option value="${escH(s)}">${escH(s)}</option>`).join('');
   const allCities = [...new Set(supaHist.map(h => h.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  const cityOpts  = '<option value="">Todas as cidades</option>' + allCities.map(c => `<option value="${c}">${c}</option>`).join('');
+  const cityOpts  = '<option value="">Todas as cidades</option>' + allCities.map(c => `<option value="${escH(c)}">${escH(c)}</option>`).join('');
 
   el.innerHTML = `
     <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
@@ -1478,7 +1490,7 @@ function filterHist(stateChanged) {
         .filter(Boolean)
     )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
     citySelect.innerHTML = '<option value="">Todas as cidades</option>' +
-      cities.map(c => `<option value="${c}">${c}</option>`).join('');
+      cities.map(c => `<option value="${escH(c)}">${escH(c)}</option>`).join('');
   }
 
   const cf = citySelect?.value || '';
@@ -1498,14 +1510,14 @@ function renderHistItems(list) {
   const w = document.createElement('div'); w.className = 'hist-list';
   list.forEach(h => {
     const d = document.createElement('div'); d.className = 'hi';
-    const loc        = h.city ? `${h.city} — ${h.state}` : `${h.state} (estado inteiro)`;
+    const loc        = h.city ? `${escH(h.city)} — ${escH(h.state)}` : `${escH(h.state)} (estado inteiro)`;
     const qtd        = h.result_count ?? '—';
     const dt         = h.searched_at ? new Date(h.searched_at).toLocaleString('pt-BR') : '';
     const canRestore = (h.result_count || 0) > 0;
     const hMode      = h.mode || 'vendedores';
-    const safeId     = h.id;
-    const safeState  = (h.state||'').replace(/'/g,"\\'");
-    const safeCity   = (h.city||'').replace(/'/g,"\\'");
+    const safeId     = escJs(h.id);
+    const safeState  = escJs(h.state);
+    const safeCity   = escJs(h.city);
     const modeBadge  = hMode === 'compradores'
       ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
       : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
@@ -1520,7 +1532,7 @@ function renderHistItems(list) {
         <div style="display:flex;gap:5px">
           ${canRestore
             ? `<button class="ab hist-restore" onclick="viewHistoryEntry('${safeId}')" title="Ver resultados salvos sem chamar a API">👁 Ver Resultados</button>`
-            : `<button class="ab" onclick="rebuscar('${safeState}','${safeCity}','${hMode}')" style="font-size:12px" title="Refazer esta busca na API">🔄 Pesquisar</button>`}
+            : `<button class="ab" onclick="rebuscar('${safeState}','${safeCity}','${escJs(hMode)}')" style="font-size:12px" title="Refazer esta busca na API">🔄 Pesquisar</button>`}
           <button class="ab hist-del" onclick="deleteHistoryEntry('${safeId}')">🗑</button>
         </div>
       </div>`;
@@ -1640,7 +1652,9 @@ function expCSV(modo) {
   const lista = _getExportList(modo);
   if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
   const h = 'Nome,Tipo,Telefone,Endereço,Cidade,Estado,Avaliação,Data de Abertura,Tempo de Atividade,CNPJ,Porte\n';
-  const rows = lista.map(c=>`"${(c.nome||'').replace(/"/g,'""')}","${c.tipo||''}","${c.telefone||''}","${(c.endereco||'').replace(/"/g,'""')}","${c.cidade||''}","${c.uf||''}","${c.avaliacao||''}","${c.abertura?fmtData(c.abertura):''}","${c.abertura?calcIdade(c.abertura):''}","${c.cnpj||''}","${c.porte||''}"`).join('\n');
+  const cell = v => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+  const rows = lista.map(c => [c.nome, c.tipo, c.telefone, c.endereco, c.cidade, c.uf, c.avaliacao,
+    c.abertura ? fmtData(c.abertura) : '', c.abertura ? calcIdade(c.abertura) : '', c.cnpj, c.porte].map(cell).join(',')).join('\n');
   const b = new Blob(['﻿'+h+rows],{type:'text/csv;charset=utf-8;'});
   const u = URL.createObjectURL(b); const a = document.createElement('a');
   a.href=u; a.download=`autolead_${modo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
@@ -1680,14 +1694,14 @@ function expPDF(modo) {
   const rows = lista.map((c,i) => `
     <tr class="${i%2?'alt':''}">
       <td>${i+1}</td>
-      <td><strong>${c.nome||'—'}</strong></td>
-      <td>${c.tipo||'—'}</td>
-      <td>${c.telefone||'—'}</td>
-      <td style="font-size:9px">${c.endereco||'—'}</td>
-      <td>${c.uf||'—'}</td>
-      <td>${c.avaliacao||'—'}</td>
+      <td><strong>${escH(c.nome||'—')}</strong></td>
+      <td>${escH(c.tipo||'—')}</td>
+      <td>${escH(c.telefone||'—')}</td>
+      <td style="font-size:9px">${escH(c.endereco||'—')}</td>
+      <td>${escH(c.uf||'—')}</td>
+      <td>${escH(c.avaliacao||'—')}</td>
       <td>${c.abertura?fmtData(c.abertura):'—'}</td>
-      <td>${c.cnpj||'—'}</td>
+      <td>${escH(c.cnpj||'—')}</td>
     </tr>`).join('');
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
     <title>AutoLead Brasil — ${modeLabel}</title>
@@ -1768,21 +1782,21 @@ async function pStores(c) {
   filtered.forEach(s => {
     const d = document.createElement('div'); d.className = 'store-card';
     const sm = STATUS_MAP[s.status] || { label: s.status||'—', cls: 'badge-yel' };
-    const safeNome = (s.company_name||'').replace(/'/g,"\\'");
-    const safeTel  = (s.phone||'').replace(/'/g,"\\'");
+    const safeNome = escJs(s.company_name);
+    const safeTel  = escJs(s.phone);
     d.innerHTML = `
       <div class="store-card-top">
-        <div class="store-name">${s.company_name}</div>
+        <div class="store-name">${escH(s.company_name)}</div>
         <span class="${sm.cls}">${sm.label}</span>
       </div>
-      ${s.phone?`<div class="store-info">📞 ${s.phone}</div>`:''}
-      ${(s.city||s.state)?`<div class="store-info">📍 ${[s.city,s.state].filter(Boolean).join(', ')}</div>`:''}
-      ${s.notes?`<div class="store-notes">${s.notes}</div>`:''}
+      ${s.phone?`<div class="store-info">📞 ${escH(s.phone)}</div>`:''}
+      ${(s.city||s.state)?`<div class="store-info">📍 ${escH([s.city,s.state].filter(Boolean).join(', '))}</div>`:''}
+      ${s.notes?`<div class="store-notes">${escH(s.notes)}</div>`:''}
       <div class="store-meta">Registrado em ${new Date(s.created_at).toLocaleDateString('pt-BR')}</div>
       <div class="cacts" style="margin-top:.7rem">
         ${s.phone?`<button class="ab wpp" onclick="wpp('${safeTel}','${safeNome}')">💬 WhatsApp</button>`:''}
-        <button class="ab" onclick="editStoreById('${s.id}')">✏ Editar</button>
-        <button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deleteStore('${s.id}')">🗑 Remover</button>
+        <button class="ab" onclick="editStoreById('${escJs(s.id)}')">✏ Editar</button>
+        <button class="ab" style="color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deleteStore('${escJs(s.id)}')">🗑 Remover</button>
       </div>`;
     w.appendChild(d);
   });

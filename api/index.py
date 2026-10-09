@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+from flask import Flask, request, jsonify, send_from_directory, abort
+import hashlib
 import requests
 import logging
 import time
@@ -28,8 +28,20 @@ logger = logging.getLogger(__name__)
 _BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = _BASE_DIR
 
-app = Flask(__name__, static_folder=FRONTEND_DIR)
-CORS(app)
+# static_folder=None: sem a rota /static automática do Flask, que serviria
+# qualquer arquivo da raiz (inclusive o .env). Os estáticos ficam na whitelist abaixo.
+# Sem CORS: o frontend é servido do mesmo domínio, então outros sites não chamam a API.
+app = Flask(__name__, static_folder=None)
+
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if request.path.startswith('/api/'):
+        resp.headers.setdefault('Cache-Control', 'no-store')
+    return resp
 
 # .strip(): valores colados no painel da Vercel podem vir com quebra de linha no fim
 GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '').strip()
@@ -253,7 +265,7 @@ def api_register():
         return jsonify({'ok': False, 'error': msg}), 400
     except Exception as exc:
         logger.error('[register] %s', exc)
-        return jsonify({'ok': False, 'error': str(exc)}), 500
+        return jsonify({'ok': False, 'error': 'Erro ao criar conta. Tente novamente.'}), 500
 
 
 # ─── ADMINISTRAÇÃO DE USUÁRIOS ────────────────────────────────
@@ -268,6 +280,51 @@ def _sb_headers() -> dict:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+_AUTH_CACHE: dict[str, tuple[str, bool, float]] = {}
+_AUTH_TTL = 300  # segundos — evita validar o token a cada chamada de detalhes
+
+
+def _require_user():
+    """Exige usuário logado e aprovado (protege a cota paga do Google).
+    Retorna None se autorizado, ou a resposta de erro pronta."""
+    auth = request.headers.get('Authorization', '')
+    token = auth[7:] if auth.lower().startswith('bearer ') else ''
+    if not token:
+        return jsonify({'ok': False, 'error': 'Faça login para usar o sistema'}), 401
+    if not SUPABASE_SERVICE_KEY:
+        return jsonify({'ok': False, 'error': 'SUPABASE_SERVICE_KEY não configurada no servidor'}), 500
+
+    key = hashlib.sha256(token.encode()).hexdigest()
+    hit = _AUTH_CACHE.get(key)
+    if hit and hit[2] > time.time():
+        email, approved = hit[0], hit[1]
+    else:
+        try:
+            resp = requests.get(f'{SUPABASE_URL}/auth/v1/user',
+                                headers={'apikey': SUPABASE_SERVICE_KEY, 'Authorization': f'Bearer {token}'},
+                                timeout=10)
+            if not resp.ok:
+                return jsonify({'ok': False, 'error': 'Sessão expirada — saia e entre novamente'}), 401
+            user = resp.json()
+            email = (user.get('email') or '').lower()
+            approved = email == ADMIN_EMAIL
+            if not approved:
+                r2 = requests.get(f'{SUPABASE_URL}/rest/v1/user_access', headers=_sb_headers(),
+                                  params={'select': 'status', 'user_id': f"eq.{user.get('id', '')}"}, timeout=10)
+                rows = r2.json() if r2.ok else []
+                approved = bool(rows) and rows[0].get('status') == 'aprovado'
+        except Exception as exc:
+            logger.error('[auth] validação do token: %s', exc)
+            return jsonify({'ok': False, 'error': 'Falha ao validar sessão'}), 500
+        if len(_AUTH_CACHE) > 500:
+            _AUTH_CACHE.clear()
+        _AUTH_CACHE[key] = (email, approved, time.time() + _AUTH_TTL)
+
+    if not approved:
+        return jsonify({'ok': False, 'error': 'Acesso não aprovado pela administradora'}), 403
+    return None
 
 
 def _require_admin():
@@ -499,6 +556,9 @@ def _cnpj_fetch(name: str, url: str, parse, cnpj: str):
 
 @app.route('/api/cnpj')
 def api_cnpj():
+    err = _require_user()
+    if err:
+        return err
     cnpj = ''.join(ch for ch in request.args.get('cnpj', '') if ch.isdigit())
     if len(cnpj) != 14:
         return jsonify({'ok': False, 'error': 'CNPJ precisa ter 14 dígitos'}), 400
@@ -526,10 +586,16 @@ def api_cnpj():
 
 @app.route('/api/buscar')
 def api_buscar():
+    err = _require_user()
+    if err:
+        return err
     uf          = request.args.get('uf',          '').strip().upper()
     query       = request.args.get('query',       '').strip()
     cidade      = request.args.get('cidade',      '').strip()
-    max_cidades = int(request.args.get('max_cidades', _MAX_CITIES))
+    try:  # limite fixo no servidor: cada cidade a mais é chamada paga ao Google
+        max_cidades = max(1, min(int(request.args.get('max_cidades', _MAX_CITIES)), _MAX_CITIES))
+    except ValueError:
+        max_cidades = _MAX_CITIES
 
     if not uf:
         return jsonify({'error': 'Parâmetro uf obrigatório'}), 400
@@ -543,6 +609,9 @@ def api_buscar():
 
 @app.route('/api/details')
 def api_details():
+    err = _require_user()
+    if err:
+        return err
     place_id = request.args.get('place_id', '').strip()
     if not place_id:
         return jsonify({'error': 'place_id obrigatório'}), 400
@@ -560,8 +629,9 @@ def api_details():
             timeout=12,
         )
         return jsonify(resp.json())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception as exc:
+        logger.error('[details] %s', exc)
+        return jsonify({'error': 'Erro ao consultar detalhes'}), 500
 
 
 @app.route('/api/index.py', methods=['GET', 'POST'])
@@ -589,7 +659,12 @@ def api_dispatch():
     return jsonify({'error': 'ação desconhecida'}), 404
 
 
-# Rotas estáticas — usadas apenas no servidor local (no Vercel o frontend é servido diretamente)
+# Rotas estáticas — usadas apenas no servidor local (no Vercel o frontend é servido diretamente).
+# Whitelist: só o que o navegador precisa. Nunca servir .env, .py, .sql etc.
+_STATIC_DIRS = ('css/', 'js/')
+_STATIC_EXT  = ('.css', '.js', '.png', '.jpg', '.svg', '.ico', '.webp', '.woff', '.woff2')
+
+
 @app.route('/')
 def index():
     return send_from_directory(FRONTEND_DIR, 'index.html')
@@ -597,7 +672,9 @@ def index():
 
 @app.route('/<path:path>')
 def static_files(path):
-    return send_from_directory(FRONTEND_DIR, path)
+    if path == 'index.html' or (path.startswith(_STATIC_DIRS) and path.lower().endswith(_STATIC_EXT)):
+        return send_from_directory(FRONTEND_DIR, path)
+    abort(404)
 
 
 if __name__ == '__main__':
