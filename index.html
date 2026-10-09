@@ -485,7 +485,7 @@ async function autoRestoreLastSearch() {
   if (!sb || !user) return;
   try {
     const { data } = await sb.from('search_history')
-      .select('id, results, mode')
+      .select('id, results, mode, state, city, searched_at')
       .eq('user_email', user.email)
       .order('searched_at', { ascending: false })
       .limit(1)
@@ -495,6 +495,7 @@ async function autoRestoreLastSearch() {
     cos.forEach((c, i) => c._idx = i);
     cacheCtx = null;
     searchMode = data.mode || 'vendedores';
+    await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
     currentPage = 0;
     filterType = 'todos';
   } catch(e) { console.warn('[autoRestore]', e); }
@@ -692,6 +693,7 @@ function pBuscar(c) {
         <span class="pill ${filterType==='loja'?'active':''}" onclick="setFilter('loja')">🔵 Lojas de Pneus</span>
         <span class="pill ${filterType==='frotista'?'active':''}" onclick="setFilter('frotista')">🚛 Frotistas</span>
         <span class="pill ${filterType==='novo'?'active':''}" onclick="setFilter('novo')">🆕 Leads Novos</span>
+        <span class="pill ${filterType==='nova'?'active':''}" onclick="setFilter('nova')">✨ Novas nesta busca</span>
       </div>
     </div>
     <div class="cnpj-panel">
@@ -773,6 +775,28 @@ async function saveToCache(searchKey, uf, city, results) {
     console.error('[cache] saveToCache:', e);
     showToast('Erro ao salvar no banco: ' + (e.message || e), 'red');
   }
+}
+
+// Marca as empresas que não estavam na pesquisa anterior da mesma região e modo.
+// Usa só o histórico já salvo no Supabase — nenhuma chamada extra ao Google.
+async function markNovasBusca(uf, city, mode, list, before) {
+  list.forEach(c => { delete c._novaBusca; delete c._novaDesde; });
+  if (!sb || !user || !list.length) return;
+  try {
+    let q = sb.from('search_history')
+      .select('results, searched_at')
+      .eq('user_email', user.email).eq('state', uf).eq('mode', mode || 'vendedores')
+      .lt('searched_at', before || new Date().toISOString())
+      .order('searched_at', { ascending: false }).limit(1);
+    q = city ? q.ilike('city', city) : q.is('city', null);
+    const { data, error } = await q.maybeSingle();
+    if (error) throw error;
+    if (!data || !Array.isArray(data.results)) return; // primeira pesquisa da região
+    const prevIds = new Set(data.results.map(r => r.id).filter(Boolean));
+    list.forEach(c => {
+      if (c.id && !prevIds.has(c.id)) { c._novaBusca = true; c._novaDesde = data.searched_at; }
+    });
+  } catch(e) { console.warn('[novas] comparação:', e); }
 }
 
 async function saveToHistory(uf, city, mode, results) {
@@ -982,6 +1006,9 @@ async function buscar() {
     cacheCtx = { key: searchKey, uf, cid };
     currentPage = 0;
 
+    setP(90, 'Comparando com a pesquisa anterior...');
+    await markNovasBusca(uf, cid, searchMode, cos);
+
     setP(95, 'Salvando no banco...');
     await incrementRateLimit(searchMode);
     await saveToCache(searchKey, uf, cid, cos);
@@ -1008,6 +1035,7 @@ function exibir() {
   if      (filterType === 'atacado')  lista = cos.filter(x => x.tipo === 'Atacadista de Pneus');
   else if (filterType === 'loja')     lista = cos.filter(x => x.tipo === 'Loja de Pneus');
   else if (filterType === 'frotista') lista = cos.filter(x => x.tipo === 'Frotista / Transportadora');
+  else if (filterType === 'nova')     lista = cos.filter(x => x._novaBusca);
   else if (filterType === 'novo') {
     const registradas = new Set((window._storesList || []).map(s => s.company_id).filter(Boolean));
     lista = cos.filter(x => x.id && !registradas.has(x.id));
@@ -1024,6 +1052,12 @@ function exibir() {
       <div class="count"><span>${total}</span> empresa${total!==1?'s':''} encontrada${total!==1?'s':''}</div>
       ${totalPages > 1 ? `<div class="page-info">Página ${currentPage+1} de ${totalPages}</div>` : ''}
     </div>`;
+
+  const novas = cos.filter(x => x._novaBusca);
+  if (novas.length && filterType !== 'nova') {
+    const desde = new Date(novas[0]._novaDesde).toLocaleDateString('pt-BR');
+    el.innerHTML += `<div class="novas-info" onclick="setFilter('nova')">✨ <strong>${novas.length}</strong> loja${novas.length!==1?'s':''} nova${novas.length!==1?'s':''} desde a pesquisa de ${desde} — marcada${novas.length!==1?'s':''} com borda verde. <u>Ver só as novas</u></div>`;
+  }
 
   if (!pagina.length) {
     el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
@@ -1068,7 +1102,7 @@ function setPage(n) {
 
 // ─── CARD ─────────────────────────────────────────────────────
 function mkCard(co) {
-  const d = document.createElement('div'); d.className = 'cc';
+  const d = document.createElement('div'); d.className = co._novaBusca ? 'cc cc-nova' : 'cc';
   const idx = co._idx !== undefined ? co._idx : 0;
   d.dataset.idx = idx;
   const iF = favs.has(co.id);
@@ -1102,7 +1136,7 @@ function mkCard(co) {
       <div class="cc-name">${co.nome}</div>
       <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${co.avaliacao}</div></div>
     </div>
-    ${leadBadge ? `<div style="margin-bottom:5px">${leadBadge}</div>` : ''}
+    ${leadBadge || co._novaBusca ? `<div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap">${co._novaBusca ? `<span class="badge-nova" title="Não apareceu na pesquisa de ${new Date(co._novaDesde).toLocaleDateString('pt-BR')}">✨ Nova nesta busca</span>` : ''}${leadBadge}</div>` : ''}
     <div class="cc-type">${co.tipo}</div>
     <div class="cc-addr">📍 ${co.endereco}${co.cidade?', '+co.cidade:''}${co.uf?'/'+co.uf:''}</div>
     ${phoneHtml}
@@ -1523,7 +1557,7 @@ async function viewHistoryEntry(id) {
   showToast('Carregando resultados...');
   try {
     const { data, error } = await sb.from('search_history')
-      .select('results, mode, state, city')
+      .select('results, mode, state, city, searched_at')
       .eq('id', id)
       .eq('user_email', user.email)
       .single();
@@ -1535,6 +1569,7 @@ async function viewHistoryEntry(id) {
     cos.forEach((c, i) => c._idx = i);
     cacheCtx = null;
     searchMode = data.mode || 'vendedores';
+    await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
     currentPage = 0;
     filterType = 'todos';
     const loc = data.city ? `${data.city} — ${data.state}` : data.state;
