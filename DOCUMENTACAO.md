@@ -740,10 +740,10 @@ Receita (publicados 1x por mês).
 - **Cruzamento com o Google** (`POST /api/receita-match`): cada card é comparado com as lojas do mesmo
   **CEP**; bate se o **número** do endereço é igual ou o **nome** é parecido. Empate entre dois candidatos
   não marca nada. O card ganha borda verde, etiqueta "🆕 Loja nova — aberta em mm/aaaa", CNPJ e abertura.
-- **Aba Leads Novos:** cards do Google ainda não registrados (os da Receita primeiro) + seção
-  "Novas na Receita (sem Google)" (`GET /api/receita-lojas`), com filtros de estado, cidade, ano e mês,
-  para o Brasil todo e sem precisar de busca. Lojas que já estão nos cards do Google ou no CRM
-  (`company_id = cnpj:<número>`) não se repetem.
+- **Filtro Leads Novos (aba Buscar):** cards do Google ainda não registrados, com os da Receita primeiro.
+- **Aba Lojas Novas** (`ctab = 'r'`, `GET /api/receita-lojas`): lojas da Receita com filtros de estado
+  (ou Brasil todo), cidade, ano e mês, sem precisar de busca. Lojas que já estão nos cards do Google
+  ou no CRM (`company_id = cnpj:<número>`) não se repetem.
 - **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.
 
 ### 8.5. Deduplicação de Resultados

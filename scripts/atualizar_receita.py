@@ -227,11 +227,23 @@ def main() -> int:
     ap.add_argument('--teste', metavar='ARQUIVO.csv', help='não grava no Supabase; salva o resultado neste CSV')
     ap.add_argument('--mes', help='pasta da Receita (AAAA-MM); padrão: a mais recente')
     ap.add_argument('--forcar', action='store_true', help='grava mesmo se a lista nova for bem menor')
+    ap.add_argument('--de-csv', metavar='ARQUIVO.csv', help='grava no Supabase um CSV gerado antes com --teste')
     args = ap.parse_args()
 
     if not args.teste and not SUPABASE_KEY:
         log('SUPABASE_SERVICE_KEY não configurada (use o .env ou os Secrets do GitHub).')
         return 1
+
+    if args.de_csv:
+        with open(args.de_csv, encoding='utf-8-sig', newline='') as f:
+            rows = [{k: (int(v) if k in ('ano', 'mes') else v or None) for k, v in r.items()}
+                    for r in csv.DictReader(f, delimiter=';')]
+        if not rows:
+            log('CSV vazio — nada foi alterado.')
+            return 1
+        log(f'CSV: {len(rows)} loja(s) da base {rows[0]["referencia"]}')
+        enviar(rows, rows[0]['referencia'], args.forcar)
+        return 0
 
     mes = args.mes or mes_mais_recente()
     ano_min = date.today().year - 2

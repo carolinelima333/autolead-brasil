@@ -89,6 +89,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         Buscar Empresas
       </div>
+      <div class="drawer-ni" id="dnr" onclick="go('r');closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        Lojas Novas
+      </div>
       <div class="drawer-ni" id="dnf" onclick="go('f');closeDrawer()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         Favoritos
@@ -131,6 +135,9 @@
         <div class="ni on" id="nb" onclick="go('b')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Buscar Empresas
         </div>
+        <div class="ni" id="nr" onclick="go('r')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>Lojas Novas
+        </div>
         <div class="ni" id="nf" onclick="go('f')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Favoritos
         </div>
@@ -163,6 +170,10 @@
       <div class="bnav-item on" id="bnb" onclick="go('b')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         Buscar
+      </div>
+      <div class="bnav-item" id="bnr" onclick="go('r')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        Novas
       </div>
       <div class="bnav-item" id="bnf" onclick="go('f')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -576,7 +587,7 @@ async function logout() {
 }
 
 // ─── NAVEGAÇÃO ────────────────────────────────────────────────
-const TABS = ['b','f','h','e','s','a'];
+const TABS = ['b','r','f','h','e','s','a'];
 function go(t) {
   ctab = t;
   TABS.forEach(x => ['n','dn','bn'].forEach(p => { const el = g(p+x); if(el) el.classList.toggle('on', x===t); }));
@@ -585,6 +596,7 @@ function go(t) {
 function render() {
   const c = g('mc');
   if (ctab==='b') pBuscar(c);
+  else if (ctab==='r') pReceita(c);
   else if (ctab==='f') pFavs(c);
   else if (ctab==='h') pHist(c);
   else if (ctab==='e') pExp(c);
@@ -727,7 +739,7 @@ function pBuscar(c) {
       <div id="cres" class="cnpj-result"></div>
     </div>
     <div id="res"></div>`;
-  if (cos.length > 0 || filterType === 'novo') exibir();
+  if (cos.length > 0) exibir();
 }
 function setFilter(t) { filterType = t; pBuscar(g('mc')); }
 function setSearchMode(mode) { searchMode = mode; pBuscar(g('mc')); }
@@ -1087,26 +1099,19 @@ function exibir() {
   }
   const qtdRf = cos.filter(x => x._rf).length;
   if (filterType === 'novo') {
-    el.innerHTML += `<div class="novas-info" style="cursor:default">🆕 Lojas desta busca ainda não registradas. As abertas desde ${ANO_NOVAS} (base da Receita) têm borda verde e vêm primeiro. Mais abaixo: lojas novas da Receita que não apareceram no Google.</div>`;
+    el.innerHTML += `<div class="novas-info" onclick="go('r')">🆕 Lojas desta busca ainda não registradas. As abertas desde ${ANO_NOVAS} (base da Receita) têm borda verde e vêm primeiro. <u>Ver lojas novas que não estão no Google</u></div>`;
   } else if (qtdRf) {
     el.innerHTML += `<div class="novas-info" onclick="setFilter('novo')">🆕 <strong>${qtdRf}</strong> loja${qtdRf!==1?'s':''} desta busca aberta${qtdRf!==1?'s':''} desde ${ANO_NOVAS} (base da Receita) — borda verde. <u>Ver em Leads Novos</u></div>`;
   }
 
   if (!pagina.length) {
-    el.innerHTML += filterType === 'novo' && !cos.length
-      ? `<div class="empty"><div class="ei">🔍</div><p>Faça uma busca para ver aqui as lojas do Google.</p><small>As lojas novas da Receita aparecem abaixo mesmo sem busca.</small></div>`
-      : `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
+    el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
   } else {
     const gr = document.createElement('div'); gr.className = 'grid';
     pagina.forEach(x => gr.appendChild(mkCard(x)));
     el.appendChild(gr);
     if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
     autoLoadDetails(pagina);
-  }
-  if (filterType === 'novo') {
-    const sec = document.createElement('div'); sec.id = 'rf-sec';
-    el.appendChild(sec);
-    renderRfSec();
   }
 }
 
@@ -1269,6 +1274,13 @@ async function cruzarReceita(uf, list) {
   } catch(e) { console.warn('[receita] cruzamento:', e); }
 }
 
+function pReceita(c) {
+  c.innerHTML = `
+    <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus abertas desde ${ANO_NOVAS} que ainda não apareceram nas suas buscas do Google — base oficial da Receita Federal</p></div>
+    <div id="rf-sec"></div>`;
+  renderRfSec();
+}
+
 function renderRfSec() {
   const el = g('rf-sec'); if (!el) return;
   if (!rf.carregado && !rf.carregando && !rf.erro && !rf.uf && cacheCtx) rf.uf = cacheCtx.uf || '';
@@ -1280,8 +1292,8 @@ function renderRfSec() {
   const mesOpts = '<option value="">Todos os meses</option>' + MESES.map((m, i) => `<option value="${i+1}"${String(rf.mes)===String(i+1)?' selected':''}>${m}</option>`).join('');
   el.innerHTML = `
     <div class="search-panel rf-panel">
-      <h3>🏛 Novas na Receita (sem Google)</h3>
-      <p class="rf-sub">Lojas de pneus (atacado e varejo) abertas desde ${ANO_NOVAS}, da base oficial da Receita Federal${rf.rows[0] ? ` de ${escH(rf.rows[0].referencia)}` : ''}. Sem MEI e sem borracharias. As que já aparecem nos cards acima não se repetem aqui.</p>
+      <h3>🔍 Filtrar lojas novas</h3>
+      <p class="rf-sub">Atacado e varejo de pneus, sem MEI e sem borracharias${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. As lojas que já aparecem na sua busca atual (com borda verde nos cards) ou que já foram registradas não se repetem aqui.</p>
       <div class="srow">
         <select id="rf-uf">${ufOpts}</select>
         <input id="rf-cid" placeholder="Cidade (opcional)" autocomplete="off" value="${escH(rf.cidade)}" onkeydown="if(event.key==='Enter')rfFiltrar()"/>
@@ -2080,7 +2092,7 @@ async function submitStore() {
       }
     }
     if ((storeData.company_id || '').startsWith('cnpj:')) rf.carregado = false; // recarrega a lista da Receita sem ela
-    if (ctab === 's') go('s');
+    if (ctab === 's' || ctab === 'r') go(ctab);
     else if (ctab === 'b' && filterType === 'novo') exibir();
   } catch(e) {
     console.error('[stores] submitStore:', e);
