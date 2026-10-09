@@ -1,0 +1,8 @@
+#!/bin/sh
+# Roda a varredura de segurança/qualidade antes de cada commit.
+# Ativado com: git config core.hooksPath .githooks  (o INICIAR_WINDOWS.bat já faz isso)
+PY=python
+command -v python >/dev/null 2>&1 || PY=py
+[ -x venv/Scripts/python.exe ] && PY=venv/Scripts/python.exe
+[ -x venv/bin/python ] && PY=venv/bin/python
+PYTHONIOENCODING=utf-8 "$PY" scripts/security_check.py
