@@ -10,7 +10,7 @@ Plataforma web de prospecção de leads no setor automotivo (pneus), com busca v
 - Dois modos de busca: **Lojas & Atacadistas** e **Frotistas / Compradores**
 - Filtragem automática de borracharias (serviços de reparo)
 - Validação de CNPJ com 3 APIs em fallback (BrasilAPI, ReceitaWS, CNPJ.ws)
-- Identificação de leads novos (empresa aberta há menos de 24 meses)
+- Identificação de leads novos (empresa aberta nos últimos 3 anos), com lojas novas da Receita Federal atualizadas automaticamente
 - Histórico permanente de pesquisas com filtros por estado e modo — restaura resultados sem consumir a API
 - Cache de resultados no Supabase (7 dias por busca)
 - Favoritos salvos por usuário no banco de dados, com busca textual

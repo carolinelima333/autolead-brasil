@@ -6,8 +6,10 @@ import requests
 import logging
 import time
 import os
+import re
 import secrets
 import string
+import unicodedata
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -584,6 +586,169 @@ def api_cnpj():
     return jsonify({'ok': False, 'error': 'Serviços de CNPJ indisponíveis no momento. Tente novamente em instantes.'}), 502
 
 
+# ─── LOJAS NOVAS (base da Receita) ────────────────────────────
+# Tabela lojas_receita, preenchida 2x por mês por scripts/atualizar_receita.py.
+# Só consulta o nosso banco — nenhuma chamada ao Google.
+
+_RF_COLS = ('cnpj,razao_social,nome_fantasia,data_abertura,cnae,logradouro,numero,'
+            'complemento,bairro,cep,municipio,uf,telefone,referencia')
+_RF_PAGE = 30
+_RF_MAX_ITENS = 300
+_CEP_RE = re.compile(r'\b(\d{5})-?(\d{3})\b')
+_NUM_RE = re.compile(r'^[^,]*,\s*(\d{1,6})\b')
+# Palavras que não identificam a loja (todas são de pneus) — ficam fora da comparação de nomes
+_RF_STOP = frozenset({
+    'LTDA', 'ME', 'EPP', 'EIRELI', 'SA', 'S/A', 'SLU', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM',
+    'COMERCIO', 'COM', 'PNEUS', 'PNEU', 'PNEUMATICOS', 'LOJA', 'DISTRIBUIDORA', 'ATACADO', 'VAREJO',
+    'AUTO', 'CENTER', 'TRUCK', 'CAR', 'CENTRO', 'SERVICOS', 'ACESSORIOS', 'PECAS', 'RODAS',
+})
+
+
+def _norm(s: str) -> str:
+    s = unicodedata.normalize('NFKD', s or '')
+    return ' '.join(''.join(ch for ch in s if not unicodedata.combining(ch)).upper().split())
+
+
+def _tokens(s: str) -> set[str]:
+    return {t for t in re.split(r'[^A-Z0-9]+', _norm(s)) if len(t) >= 3 and t not in _RF_STOP}
+
+
+def _sim_nome(nome_google: str, row: dict) -> float:
+    a = _tokens(nome_google)
+    melhor = 0.0
+    for nome_rf in (row.get('nome_fantasia'), row.get('razao_social')):
+        b = _tokens(nome_rf or '')
+        if a and b:
+            melhor = max(melhor, len(a & b) / min(len(a), len(b)))
+    return melhor
+
+
+def _rf_erro(resp):
+    if resp.status_code == 404 or 'PGRST205' in resp.text:
+        return jsonify({'ok': False, 'error': 'A base da Receita ainda não foi carregada.'}), 503
+    logger.error('[receita] Supabase HTTP %d', resp.status_code)
+    return jsonify({'ok': False, 'error': 'Erro ao consultar a base da Receita. Tente novamente.'}), 502
+
+
+@app.route('/api/receita-lojas')
+def api_receita_lojas():
+    """Lista paginada das lojas novas da Receita, com filtros de local e de ano/mês de abertura."""
+    err = _require_user()
+    if err:
+        return err
+    uf = request.args.get('uf', '').strip().upper()
+    if uf and uf not in _CAPITAIS:
+        return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
+    cidade = re.sub(r"[^A-Z '\-]", '', _norm(request.args.get('cidade', '')))[:60].strip()
+    try:
+        ano  = int(request.args.get('ano') or 0)
+        mes  = int(request.args.get('mes') or 0)
+        page = max(0, min(int(request.args.get('page') or 0), 1000))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'Filtro inválido'}), 400
+    if (ano and not 2000 <= ano <= 2100) or not 0 <= mes <= 12:
+        return jsonify({'ok': False, 'error': 'Ano ou mês inválido'}), 400
+    # CNPJs que já aparecem em cards do Google ou no CRM — não repetir aqui
+    excluir = [c for c in request.args.get('excluir', '').split(',') if len(c) == 14 and c.isdigit()][:_RF_MAX_ITENS]
+
+    params = {'select': _RF_COLS, 'order': 'data_abertura.desc,cnpj',
+              'limit': _RF_PAGE, 'offset': page * _RF_PAGE}
+    if uf:
+        params['uf'] = f'eq.{uf}'
+    if cidade:
+        params['municipio'] = f'eq.{cidade}'
+    if ano:
+        params['ano'] = f'eq.{ano}'
+    if mes:
+        params['mes'] = f'eq.{mes}'
+    if excluir:
+        params['cnpj'] = f'not.in.({",".join(excluir)})'
+    try:
+        resp = requests.get(f'{SUPABASE_URL}/rest/v1/lojas_receita', params=params,
+                            headers={**_sb_headers(), 'Prefer': 'count=exact'}, timeout=10)
+    except requests.RequestException as exc:
+        logger.error('[receita] lista: %s', exc)
+        return jsonify({'ok': False, 'error': 'Erro ao consultar a base da Receita. Tente novamente.'}), 502
+    if not resp.ok:
+        return _rf_erro(resp)
+    rows = resp.json()
+    total = resp.headers.get('Content-Range', '*/0').split('/')[-1]
+    return jsonify({'ok': True, 'rows': rows, 'total': int(total) if total.isdigit() else len(rows),
+                    'page_size': _RF_PAGE})
+
+
+@app.route('/api/receita-match', methods=['POST'])
+def api_receita_match():
+    """Cruza os cards do Google com a base da Receita: mesmo CEP e (mesmo número ou nome parecido).
+    Na dúvida (dois candidatos empatados) não marca nada."""
+    err = _require_user()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    uf = str(data.get('uf') or '').strip().upper()
+    itens = data.get('itens') if isinstance(data.get('itens'), list) else []
+    itens = [i for i in itens[:_RF_MAX_ITENS] if isinstance(i, dict)]
+
+    por_cep: dict[str, list[dict]] = {}
+    for it in itens:
+        m = _CEP_RE.search(str(it.get('endereco') or '')[:300])
+        if m:
+            por_cep.setdefault(m.group(1) + m.group(2), []).append(it)
+    if not por_cep:
+        return jsonify({'ok': True, 'matches': {}})
+
+    ceps = list(por_cep)
+    candidatos: dict[str, list[dict]] = {}
+    try:
+        for i in range(0, len(ceps), 100):
+            params = {'select': 'cnpj,razao_social,nome_fantasia,data_abertura,numero,cep,telefone',
+                      'cep': f'in.({",".join(ceps[i:i + 100])})'}
+            if uf in _CAPITAIS:
+                params['uf'] = f'eq.{uf}'
+            resp = requests.get(f'{SUPABASE_URL}/rest/v1/lojas_receita', params=params,
+                                headers=_sb_headers(), timeout=10)
+            if not resp.ok:
+                return _rf_erro(resp)
+            for row in resp.json():
+                candidatos.setdefault(row['cep'], []).append(row)
+    except requests.RequestException as exc:
+        logger.error('[receita] cruzamento: %s', exc)
+        return jsonify({'ok': False, 'error': 'Erro ao consultar a base da Receita. Tente novamente.'}), 502
+
+    escolhas: dict[str, tuple[float, str, dict]] = {}  # cnpj -> (pontos, place_id, linha)
+    for cep, lista in por_cep.items():
+        for it in lista:
+            pid = str(it.get('id') or '')[:200]
+            endereco = str(it.get('endereco') or '')[:300]
+            m = _NUM_RE.search(endereco)
+            num_g = m.group(1).lstrip('0') if m else ''
+            pontos = []
+            for row in candidatos.get(cep, []):
+                num_rf = re.sub(r'\D', '', row.get('numero') or '').lstrip('0')
+                mesmo_num = bool(num_g) and num_g == num_rf
+                sim = _sim_nome(str(it.get('nome') or '')[:200], row)
+                if mesmo_num or sim >= 0.5:
+                    pontos.append((int(mesmo_num) + sim, row))
+            if not pid or not pontos:
+                continue
+            pontos.sort(key=lambda p: p[0], reverse=True)
+            if len(pontos) > 1 and pontos[0][0] == pontos[1][0]:
+                continue  # empate: não dá para saber qual é
+            nota, row = pontos[0]
+            atual = escolhas.get(row['cnpj'])
+            if not atual or nota > atual[0]:
+                escolhas[row['cnpj']] = (nota, pid, row)
+
+    matches = {}
+    for nota, pid, row in escolhas.values():
+        if pid not in matches or nota > matches[pid][0]:
+            matches[pid] = (nota, row)
+    return jsonify({'ok': True, 'matches': {
+        pid: {k: row.get(k) for k in ('cnpj', 'razao_social', 'nome_fantasia', 'data_abertura', 'telefone')}
+        for pid, (nota, row) in matches.items()
+    }})
+
+
 @app.route('/api/buscar')
 def api_buscar():
     err = _require_user()
@@ -648,6 +813,10 @@ def api_dispatch():
         return api_register()
     if action == 'cnpj':
         return api_cnpj()
+    if action == 'receita-lojas':
+        return api_receita_lojas()
+    if action == 'receita-match':
+        return api_receita_match()
     if action == 'reset-request':
         return api_reset_request()
     if action == 'admin-users':

@@ -256,7 +256,12 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const TERMS_VENDEDORES  = ['distribuidora de pneus','atacadista de pneus','loja de pneus','revenda de pneus','pneus truck center'];
 const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviario','logistica transporte cargas'];
 
-const CNAE_VENDEDOR  = ['4530701','4530702'];
+// 4530-7/02 atacado e 4530-7/05 varejo de pneumáticos (autopeças fica de fora)
+const CNAE_VENDEDOR  = ['4530702','4530705'];
+const CNAE_NOME      = { '4530702': 'Atacado de pneus', '4530705': 'Varejo de pneus' };
+// "Loja nova" = aberta nos últimos 3 anos (ano atual e os 2 anteriores) — mesma janela da base da Receita
+const ANO_NOVAS      = new Date().getFullYear() - 2;
+const MESES          = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CNAE_COMPRADOR = ['4930202'];
 const CNAE_BLOQUEADO = ['4520006'];
 
@@ -280,6 +285,10 @@ const PAGE_SIZE = 30;
 let dailyLimits = { vendedores: 0, compradores: 0 };
 let storeFilter = 'todos';
 let favSearch = '';
+// Seção "Novas na Receita" da aba Leads Novos
+let rf = { uf: '', cidade: '', ano: '', mes: '', page: 0, rows: [], total: 0, pageSize: 30, carregado: false, carregando: false, erro: '' };
+const rfRows = new Map();      // cnpj -> linha da Receita exibida (para WhatsApp/Registrar)
+const rfVistos = new WeakSet(); // cards do Google já cruzados com a Receita nesta sessão
 
 const STATUS_MAP = {
   contato:       { label: 'Em contato',          cls: 'badge-blue' },
@@ -509,6 +518,7 @@ async function autoRestoreLastSearch() {
     cacheCtx = null;
     searchMode = data.mode || 'vendedores';
     await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
+    await cruzarReceita(data.state, cos);
     currentPage = 0;
     filterType = 'todos';
   } catch(e) { console.warn('[autoRestore]', e); }
@@ -556,7 +566,7 @@ function stopIdleWatch() {
 async function logout() {
   stopIdleWatch();
   if (sb) await sb.auth.signOut().catch(() => {});
-  user = null; cos = []; cacheCtx = null; favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
+  user = null; cos = []; cacheCtx = null; rf = { ...rf, uf: '', cidade: '', ano: '', mes: '', page: 0, rows: [], total: 0, carregado: false, erro: '' }; rfRows.clear(); favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
   dailyLimits = { vendedores: 0, compradores: 0 };
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
@@ -717,7 +727,7 @@ function pBuscar(c) {
       <div id="cres" class="cnpj-result"></div>
     </div>
     <div id="res"></div>`;
-  if (cos.length > 0) exibir();
+  if (cos.length > 0 || filterType === 'novo') exibir();
 }
 function setFilter(t) { filterType = t; pBuscar(g('mc')); }
 function setSearchMode(mode) { searchMode = mode; pBuscar(g('mc')); }
@@ -981,6 +991,8 @@ async function buscar() {
       cos.forEach((c, i) => c._idx = i);
       cacheCtx = { key: searchKey, uf, cid };
       hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, fromCache: true });
+      setP(90, 'Cruzando com a base da Receita...');
+      await cruzarReceita(uf, cos);
       setP(100, 'Carregado do banco!');
       setTimeout(() => exibir(), 350);
       g('bbs').disabled = false;
@@ -1020,6 +1032,8 @@ async function buscar() {
 
     setP(90, 'Comparando com a pesquisa anterior...');
     await markNovasBusca(uf, cid, searchMode, cos);
+    setP(92, 'Cruzando com a base da Receita...');
+    await cruzarReceita(uf, cos);
 
     setP(95, 'Salvando no banco...');
     await incrementRateLimit(searchMode);
@@ -1050,7 +1064,8 @@ function exibir() {
   else if (filterType === 'nova')     lista = cos.filter(x => x._novaBusca);
   else if (filterType === 'novo') {
     const registradas = new Set((window._storesList || []).map(s => s.company_id).filter(Boolean));
-    lista = cos.filter(x => x.id && !registradas.has(x.id));
+    // Lojas abertas nos últimos 3 anos (cruzadas com a Receita) vêm primeiro
+    lista = cos.filter(x => x.id && !registradas.has(x.id)).sort((a, b) => (b._rf ? 1 : 0) - (a._rf ? 1 : 0));
   }
 
   const total = lista.length;
@@ -1070,19 +1085,32 @@ function exibir() {
     const desde = new Date(novas[0]._novaDesde).toLocaleDateString('pt-BR');
     el.innerHTML += `<div class="novas-info" onclick="setFilter('nova')">✨ <strong>${novas.length}</strong> loja${novas.length!==1?'s':''} nova${novas.length!==1?'s':''} desde a pesquisa de ${desde} — marcada${novas.length!==1?'s':''} com borda verde. <u>Ver só as novas</u></div>`;
   }
+  const qtdRf = cos.filter(x => x._rf).length;
+  if (filterType === 'novo') {
+    el.innerHTML += `<div class="novas-info" style="cursor:default">🆕 Lojas desta busca ainda não registradas. As abertas desde ${ANO_NOVAS} (base da Receita) têm borda verde e vêm primeiro. Mais abaixo: lojas novas da Receita que não apareceram no Google.</div>`;
+  } else if (qtdRf) {
+    el.innerHTML += `<div class="novas-info" onclick="setFilter('novo')">🆕 <strong>${qtdRf}</strong> loja${qtdRf!==1?'s':''} desta busca aberta${qtdRf!==1?'s':''} desde ${ANO_NOVAS} (base da Receita) — borda verde. <u>Ver em Leads Novos</u></div>`;
+  }
 
   if (!pagina.length) {
-    el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
-    return;
+    el.innerHTML += filterType === 'novo' && !cos.length
+      ? `<div class="empty"><div class="ei">🔍</div><p>Faça uma busca para ver aqui as lojas do Google.</p><small>As lojas novas da Receita aparecem abaixo mesmo sem busca.</small></div>`
+      : `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
+  } else {
+    const gr = document.createElement('div'); gr.className = 'grid';
+    pagina.forEach(x => gr.appendChild(mkCard(x)));
+    el.appendChild(gr);
+    if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
+    autoLoadDetails(pagina);
   }
-  const gr = document.createElement('div'); gr.className = 'grid';
-  pagina.forEach(x => gr.appendChild(mkCard(x)));
-  el.appendChild(gr);
-  if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
-  autoLoadDetails(pagina);
+  if (filterType === 'novo') {
+    const sec = document.createElement('div'); sec.id = 'rf-sec';
+    el.appendChild(sec);
+    renderRfSec();
+  }
 }
 
-function mkPagination(current, total) {
+function mkPagination(current, total, fn = 'setPage') {
   const nav = document.createElement('div'); nav.className = 'pagination';
   const pages = [];
   if (total <= 7) {
@@ -1095,12 +1123,12 @@ function mkPagination(current, total) {
     pages.push(total - 1);
   }
   const prev = current > 0
-    ? `<button class="page-btn" onclick="setPage(${current-1})">← Anterior</button>` : '';
+    ? `<button class="page-btn" onclick="${fn}(${current-1})">← Anterior</button>` : '';
   const next = current < total - 1
-    ? `<button class="page-btn" onclick="setPage(${current+1})">Próxima →</button>` : '';
+    ? `<button class="page-btn" onclick="${fn}(${current+1})">Próxima →</button>` : '';
   const nums = pages.map(p => p === '…'
     ? `<span class="page-ellipsis">…</span>`
-    : `<button class="page-btn${p===current?' active':''}" onclick="setPage(${p})">${p+1}</button>`
+    : `<button class="page-btn${p===current?' active':''}" onclick="${fn}(${p})">${p+1}</button>`
   ).join('');
   nav.innerHTML = prev + nums + next;
   return nav;
@@ -1114,7 +1142,7 @@ function setPage(n) {
 
 // ─── CARD ─────────────────────────────────────────────────────
 function mkCard(co) {
-  const d = document.createElement('div'); d.className = co._novaBusca ? 'cc cc-nova' : 'cc';
+  const d = document.createElement('div'); d.className = co._novaBusca || co._rf ? 'cc cc-nova' : 'cc';
   const idx = co._idx !== undefined ? co._idx : 0;
   d.dataset.idx = idx;
   const iF = favs.has(co.id);
@@ -1148,7 +1176,7 @@ function mkCard(co) {
       <div class="cc-name">${escH(co.nome)}</div>
       <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${escH(co.avaliacao)}</div></div>
     </div>
-    ${leadBadge || co._novaBusca ? `<div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap">${co._novaBusca ? `<span class="badge-nova" title="Não apareceu na pesquisa de ${new Date(co._novaDesde).toLocaleDateString('pt-BR')}">✨ Nova nesta busca</span>` : ''}${leadBadge}</div>` : ''}
+    ${leadBadge || co._novaBusca || co._rf ? `<div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap">${co._rf ? `<span class="badge-nova" title="Base da Receita Federal · CNPJ ${escH(fmtCnpj(co.cnpj))}">🆕 Loja nova — aberta em ${escH(mesAno(co._rf.abertura))}</span>` : ''}${co._novaBusca ? `<span class="badge-nova" title="Não apareceu na pesquisa de ${new Date(co._novaDesde).toLocaleDateString('pt-BR')}">✨ Nova nesta busca</span>` : ''}${leadBadge}</div>` : ''}
     <div class="cc-type">${escH(co.tipo)}</div>
     <div class="cc-addr">📍 ${escH(co.endereco)}${co.cidade?', '+escH(co.cidade):''}${co.uf?'/'+escH(co.uf):''}</div>
     ${phoneHtml}
@@ -1213,12 +1241,166 @@ function tgCNPJ(idx) {
 }
 function wppIdx(idx) { const co = cos[idx]; if (co) wpp(co.telefone, co.nome); }
 
+// ─── LOJAS NOVAS (base da Receita) ────────────────────────────
+// A tabela é atualizada 2x por mês pelo GitHub Actions. Tudo aqui consulta só o
+// nosso banco — nenhuma chamada ao Google.
+
+// Marca os cards do Google que batem com uma loja nova da Receita (mesmo CEP + número/nome).
+async function cruzarReceita(uf, list) {
+  const pend = list.filter(c => c.id && !rfVistos.has(c)).slice(0, 300);
+  if (!pend.length) return;
+  try {
+    const r = await fetch('/api/receita-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      body: JSON.stringify({ uf, itens: pend.map(c => ({ id: c.id, nome: c.nome, endereco: c.endereco })) }),
+    });
+    if (!r.ok) return; // base ainda não carregada ou fora do ar: os cards seguem normais
+    const { matches = {} } = await r.json();
+    pend.forEach(c => {
+      rfVistos.add(c);
+      const m = matches[c.id];
+      if (!m) { delete c._rf; return; }
+      c._rf = { abertura: m.data_abertura };
+      rf.carregado = false; // a lista da Receita precisa sair sem as lojas que já estão no Google
+      c.cnpj = m.cnpj;
+      if (!c.abertura) c.abertura = m.data_abertura;
+    });
+  } catch(e) { console.warn('[receita] cruzamento:', e); }
+}
+
+function renderRfSec() {
+  const el = g('rf-sec'); if (!el) return;
+  if (!rf.carregado && !rf.carregando && !rf.erro && !rf.uf && cacheCtx) rf.uf = cacheCtx.uf || '';
+  const ufOpts = '<option value="">Brasil todo</option>' + UFS.map(u => `<option value="${u}"${rf.uf===u?' selected':''}>${u}</option>`).join('');
+  const anoAtual = new Date().getFullYear();
+  const anos = [];
+  for (let a = anoAtual; a >= ANO_NOVAS; a--) anos.push(a);
+  const anoOpts = '<option value="">Todos os anos</option>' + anos.map(a => `<option value="${a}"${String(rf.ano)===String(a)?' selected':''}>${a}</option>`).join('');
+  const mesOpts = '<option value="">Todos os meses</option>' + MESES.map((m, i) => `<option value="${i+1}"${String(rf.mes)===String(i+1)?' selected':''}>${m}</option>`).join('');
+  el.innerHTML = `
+    <div class="search-panel rf-panel">
+      <h3>🏛 Novas na Receita (sem Google)</h3>
+      <p class="rf-sub">Lojas de pneus (atacado e varejo) abertas desde ${ANO_NOVAS}, da base oficial da Receita Federal${rf.rows[0] ? ` de ${escH(rf.rows[0].referencia)}` : ''}. Sem MEI e sem borracharias. As que já aparecem nos cards acima não se repetem aqui.</p>
+      <div class="srow">
+        <select id="rf-uf">${ufOpts}</select>
+        <input id="rf-cid" placeholder="Cidade (opcional)" autocomplete="off" value="${escH(rf.cidade)}" onkeydown="if(event.key==='Enter')rfFiltrar()"/>
+        <select id="rf-ano">${anoOpts}</select>
+        <select id="rf-mes">${mesOpts}</select>
+        <button class="bsc rf-btn" onclick="rfFiltrar()">Filtrar</button>
+      </div>
+    </div>
+    <div id="rf-res"></div>`;
+  if (!rf.carregado && !rf.carregando && !rf.erro) loadRf();
+  else renderRfRes();
+}
+
+function rfFiltrar() {
+  rf.uf = g('rf-uf').value;
+  rf.cidade = (g('rf-cid').value || '').trim();
+  rf.ano = g('rf-ano').value;
+  rf.mes = g('rf-mes').value;
+  rf.page = 0;
+  loadRf();
+}
+function rfPage(n) {
+  rf.page = n;
+  loadRf().then(() => { const el = g('rf-sec'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+}
+
+async function loadRf() {
+  rf.carregando = true; rf.erro = '';
+  renderRfRes();
+  // Não repete lojas que já estão nos cards do Google ou registradas no CRM
+  const excluir = new Set(cos.map(c => c.cnpj).filter(Boolean));
+  (window._storesList || []).forEach(s => { if ((s.company_id || '').startsWith('cnpj:')) excluir.add(s.company_id.slice(5)); });
+  const params = new URLSearchParams({ page: rf.page });
+  if (rf.uf) params.set('uf', rf.uf);
+  if (rf.cidade) params.set('cidade', rf.cidade);
+  if (rf.ano) params.set('ano', rf.ano);
+  if (rf.mes) params.set('mes', rf.mes);
+  if (excluir.size) params.set('excluir', [...excluir].slice(0, 300).join(','));
+  try {
+    const r = await fetch('/api/receita-lojas?' + params, { headers: await authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || 'Erro ao consultar a base da Receita.');
+    rf.rows = d.rows || []; rf.total = d.total || 0; rf.pageSize = d.page_size || 30;
+    rf.rows.forEach(x => rfRows.set(x.cnpj, x));
+    rf.carregado = true;
+  } catch(e) {
+    rf.rows = []; rf.total = 0; rf.erro = e.message;
+  }
+  rf.carregando = false;
+  renderRfSec();
+}
+
+function renderRfRes() {
+  const el = g('rf-res'); if (!el) return;
+  if (rf.carregando) { el.innerHTML = '<div class="ld"><div class="spin"></div><div style="font-size:12px;color:var(--txt3)">Consultando a base da Receita...</div></div>'; return; }
+  if (rf.erro) { el.innerHTML = `<div class="empty"><div class="ei">⚠️</div><p>${escH(rf.erro)}</p><small><u style="cursor:pointer" onclick="loadRf()">Tentar de novo</u></small></div>`; return; }
+  if (!rf.rows.length) { el.innerHTML = '<div class="empty"><div class="ei">🔍</div><p>Nenhuma loja nova da Receita com esses filtros.</p><small>Tente outro estado, cidade, ano ou mês.</small></div>'; return; }
+  const totalPages = Math.max(1, Math.ceil(rf.total / rf.pageSize));
+  el.innerHTML = `
+    <div class="results-header">
+      <div class="count"><span>${rf.total}</span> loja${rf.total!==1?'s':''} nova${rf.total!==1?'s':''} na Receita</div>
+      ${totalPages > 1 ? `<div class="page-info">Página ${rf.page+1} de ${totalPages}</div>` : ''}
+    </div>`;
+  const gr = document.createElement('div'); gr.className = 'grid';
+  rf.rows.forEach(x => gr.appendChild(mkRfCard(x)));
+  el.appendChild(gr);
+  if (totalPages > 1) el.appendChild(mkPagination(rf.page, totalPages, 'rfPage'));
+}
+
+function rfEndereco(x) {
+  return [x.logradouro, x.numero].filter(Boolean).join(', ') + (x.bairro ? ' - ' + x.bairro : '');
+}
+
+function mkRfCard(x) {
+  const d = document.createElement('div'); d.className = 'cc cc-nova';
+  const nome = x.nome_fantasia || x.razao_social;
+  const end = rfEndereco(x);
+  const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([nome, end, x.municipio, x.uf].join(' '));
+  const cnpj = escJs(x.cnpj);
+  d.innerHTML = `
+    <div class="cc-top"><div class="cc-name">${escH(nome)}</div></div>
+    <div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap"><span class="badge-nova">🆕 Loja nova — aberta em ${escH(mesAno(x.data_abertura))}</span><span class="badge-blue">🏛 Só na Receita</span></div>
+    <div class="cc-type">${escH(CNAE_NOME[x.cnae] || 'Comércio de pneus')} · CNPJ ${escH(fmtCnpj(x.cnpj))}</div>
+    ${x.nome_fantasia ? `<div class="cc-type" style="font-size:10px">${escH(x.razao_social)}</div>` : ''}
+    <div class="cc-addr">📍 ${escH(end)}${end ? ', ' : ''}${escH(x.municipio)}/${escH(x.uf)}${x.cep ? ' · CEP ' + escH(x.cep) : ''}</div>
+    ${x.telefone ? `<div class="cc-phone">📞 ${escH(x.telefone)}</div>` : '<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não informado na Receita</div>'}
+    <div class="cc-since">📅 Aberta desde ${escH(fmtData(x.data_abertura))} · ${escH(calcIdade(x.data_abertura))}</div>
+    <hr class="cc-sep"/>
+    <div class="cacts">
+      ${linkBtn(mapsUrl, '🗺 Maps')}
+      ${x.telefone ? `<button class="ab wpp" onclick="rfWpp('${cnpj}')">💬 WhatsApp</button>` : ''}
+      <button class="ab ab-store" onclick="rfRegistrar('${cnpj}')">📋 Registrar</button>
+    </div>`;
+  return d;
+}
+
+function rfWpp(cnpj) {
+  const x = rfRows.get(cnpj);
+  if (x && x.telefone) wpp(x.telefone, x.nome_fantasia || x.razao_social);
+}
+
+// Registra no CRM com company_id "cnpj:<número>" — some da lista da Receita depois de salvo
+function rfRegistrar(cnpj) {
+  const x = rfRows.get(cnpj); if (!x) return;
+  openStoreModal(undefined);
+  const titulo = s => (s || '').toLowerCase().replace(/(^|\s)\S/g, ch => ch.toUpperCase());
+  const set = (id, v) => { const el = g(id); if (el) el.value = v || ''; };
+  set('st-nome', titulo(x.nome_fantasia || x.razao_social));
+  set('st-tel', x.telefone);
+  set('st-end', titulo(rfEndereco(x)));
+  set('st-cid', titulo(x.municipio));
+  set('st-uf', x.uf);
+  set('st-coid', 'cnpj:' + x.cnpj);
+}
+
 // ─── VALIDAÇÃO DE LEAD ────────────────────────────────────────
-function isWithin24Months(isoDate) {
-  if (!isoDate) return false;
-  const parts = isoDate.split(/[-\/]/);
-  const d = new Date(+parts[0], +parts[1] - 1, +(parts[2] || 1));
-  return (new Date() - d) / (30.44 * 24 * 3600 * 1000) <= 24;
+// Aberta nos últimos 3 anos (desde 1º de janeiro de ANO_NOVAS)
+function abertaRecente(isoDate) {
+  return !!isoDate && +String(isoDate).slice(0, 4) >= ANO_NOVAS;
 }
 
 function validateLead(d) {
@@ -1228,7 +1410,7 @@ function validateLead(d) {
   const BLOCK_NOME = ['borracharia','borrachas','borracheiro','reforma de pneu','conserto de pneu','recapagem'];
   const nomeBlock = BLOCK_NOME.some(w => nome.includes(w));
   const isMEI     = d.is_mei === true;
-  const isNovo    = isWithin24Months(d.data_inicio_atividade);
+  const isNovo    = abertaRecente(d.data_inicio_atividade);
   const isVend    = CNAE_VENDEDOR.includes(code);
   const isComp    = CNAE_COMPRADOR.includes(code);
   const isCnaeBlk = CNAE_BLOQUEADO.includes(code);
@@ -1237,7 +1419,7 @@ function validateLead(d) {
   if (nomeBlock || isCnaeBlk) return { status:'bloqueado', label:'🚫 Descartado',       cls:'badge-bad',  msg:`CNAE ${code||'?'} — serviço de reparo/borracharia` };
   if (isMEI)                  return { status:'filtrado',  label:'⚠️ MEI',              cls:'badge-yel',  msg:'Microempreendedor Individual — fora do foco comercial' };
   if (isComp)                 return { status:'comprador', label:'🚛 Frotista',          cls:'badge-blue', msg:'Transportadora — potencial compradora de pneus em larga escala' };
-  if (isVend && isNovo)       return { status:'novo',      label:'🆕 Lead Novo',         cls:'badge-novo', msg:'CNAE de comércio de pneus · empresa aberta há < 24 meses — prioridade alta' };
+  if (isVend && isNovo)       return { status:'novo',      label:'🆕 Lead Novo',         cls:'badge-novo', msg:`CNAE de comércio de pneus · empresa aberta desde ${ANO_NOVAS} — prioridade alta` };
   if (isVend)                 return { status:'aprovado',  label:'✅ Aprovado',           cls:'badge-ok',   msg:'CNAE confirma comércio de pneus (atacado ou varejo)' };
   if (isME_EPP)               return { status:'potencial', label:'📦 ME/EPP — Verificar', cls:'badge-yel',  msg:`Porte compatível · CNAE ${code||'não mapeado'} — verifique manualmente` };
   return { status:'indefinido', label:'❓ Verificar', cls:'badge-yel', msg:`CNAE ${code||'não informado'} — classificação manual necessária` };
@@ -1263,7 +1445,7 @@ async function bCNPJCard(idx) {
     const d = await fetchCNPJ(raw);
     const co = cos[idx];
     const lead = validateLead(d);
-    const isNovo = isWithin24Months(d.data_inicio_atividade);
+    const isNovo = abertaRecente(d.data_inicio_atividade);
     if (co) {
       co.abertura     = d.data_inicio_atividade || null;
       co.cnpj         = raw;
@@ -1279,7 +1461,7 @@ async function bCNPJCard(idx) {
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
         ${situBadge}
         <span class="${lead.cls}">${lead.label}</span>
-        ${isNovo ? '<span class="badge-novo">🆕 &lt; 24 meses</span>' : ''}
+        ${isNovo ? `<span class="badge-novo">🆕 Aberta desde ${ANO_NOVAS}</span>` : ''}
       </div>
       <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${lead.msg}</div>
       <strong>${fmtData(d.data_inicio_atividade)}</strong> · ${calcIdade(d.data_inicio_atividade)}<br>
@@ -1315,7 +1497,7 @@ async function qCNPJ() {
         <div style="margin-bottom:.8rem;display:flex;flex-wrap:wrap;gap:5px">
           ${ok?'<span class="badge-ok">● Ativa</span>':`<span class="badge-bad">● ${escH(d.situacao||'Inativa')}</span>`}
           ${(()=>{ const l=validateLead(d); return `<span class="${l.cls}">${l.label}</span>`; })()}
-          ${isWithin24Months(d.data_inicio_atividade)?'<span class="badge-novo">🆕 Lead Novo</span>':''}
+          ${abertaRecente(d.data_inicio_atividade)?'<span class="badge-novo">🆕 Lead Novo</span>':''}
           ${d.natureza?`<span class="badge-yel">${escH(d.natureza)}</span>`:''}
         </div>
         <div class="cnpj-grid">
@@ -1573,6 +1755,7 @@ async function viewHistoryEntry(id) {
     cacheCtx = null;
     searchMode = data.mode || 'vendedores';
     await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
+    await cruzarReceita(data.state, cos);
     currentPage = 0;
     filterType = 'todos';
     const loc = data.city ? `${data.city} — ${data.state}` : data.state;
@@ -1896,6 +2079,7 @@ async function submitStore() {
         window._storesList.push(storeData);
       }
     }
+    if ((storeData.company_id || '').startsWith('cnpj:')) rf.carregado = false; // recarrega a lista da Receita sem ela
     if (ctab === 's') go('s');
     else if (ctab === 'b' && filterType === 'novo') exibir();
   } catch(e) {
@@ -1935,6 +2119,14 @@ function calcIdade(iso) {
   const anos = Math.floor((new Date()-new Date(+y,+m-1,+(d||1)))/(365.25*24*3600*1e3));
   if (anos <= 0) return 'menos de 1 ano';
   return `${anos} ano${anos!==1?'s':''} no mercado`;
+}
+function mesAno(iso) {
+  const [y, m] = String(iso || '').split('-');
+  return m ? `${m}/${y}` : '—';
+}
+function fmtCnpj(c) {
+  const v = String(c || '').replace(/\D/g, '');
+  return v.length === 14 ? v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : v;
 }
 function openMap(lat,lon) { window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=17`,'_blank'); }
 function wpp(tel,nome) {

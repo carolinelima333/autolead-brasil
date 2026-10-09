@@ -225,3 +225,36 @@ INSERT INTO public.user_access (user_id, email, name, status, decided_at)
 SELECT id, email, raw_user_meta_data ->> 'name', 'aprovado', NOW()
 FROM auth.users
 ON CONFLICT (user_id) DO NOTHING;
+
+-- ──────────────────────────────────────────────────────────────
+-- 7. Lojas de pneus abertas nos últimos 3 anos (base da Receita Federal)
+--    Preenchida pelo scripts/atualizar_receita.py (GitHub Actions, 2x por mês).
+--    A lista é substituída a cada execução: o CNPJ é a chave, sem duplicar.
+--    Só o backend lê/grava (service key) — o navegador não acessa direto.
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.lojas_receita (
+  cnpj          TEXT        PRIMARY KEY CHECK (cnpj ~ '^[0-9]{14}$'),
+  razao_social  TEXT        NOT NULL,
+  nome_fantasia TEXT,
+  data_abertura DATE        NOT NULL,
+  ano           SMALLINT    NOT NULL,
+  mes           SMALLINT    NOT NULL CHECK (mes BETWEEN 1 AND 12),
+  cnae          TEXT        NOT NULL,
+  logradouro    TEXT,
+  numero        TEXT,
+  complemento   TEXT,
+  bairro        TEXT,
+  cep           TEXT,
+  municipio     TEXT        NOT NULL,
+  uf            TEXT        NOT NULL,
+  telefone      TEXT,
+  referencia    TEXT        NOT NULL,   -- mês da base da Receita (AAAA-MM)
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS lojas_receita_local ON public.lojas_receita (uf, municipio, data_abertura DESC);
+CREATE INDEX IF NOT EXISTS lojas_receita_cep   ON public.lojas_receita (cep);
+CREATE INDEX IF NOT EXISTS lojas_receita_ano   ON public.lojas_receita (ano, mes);
+
+ALTER TABLE public.lojas_receita ENABLE ROW LEVEL SECURITY;
+-- Sem políticas: anon/authenticated não leem nem gravam; só a service key do backend
+REVOKE ALL ON public.lojas_receita FROM anon, authenticated;

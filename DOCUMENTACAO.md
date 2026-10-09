@@ -26,7 +26,7 @@
 
 - Encontrar leads qualificados de pneus por estado e/ou cidade
 - Diferenciar automaticamente vendedores de compradores
-- Identificar empresas novas (abertura < 24 meses) como leads prioritários
+- Identificar empresas novas (abertas nos últimos 3 anos) como leads prioritários, cruzando com a base da Receita Federal
 - Bloquear empresas irrelevantes (borracharias, oficinas, etc.)
 - Validar e enriquecer dados via CNPJ
 - Gerenciar o relacionamento com leads em um CRM integrado
@@ -402,6 +402,7 @@ Retorna detalhes completos de uma empresa pelo place_id.
 - Falha na Google Places API: retorna `{"error": "..."}` com status 500
 - Parâmetro ausente: retorna `{"error": "..."}` com status 400
 - Erro na criação de usuário: retorna `{"ok": false, "error": "..."}` com status 200
+- Base da Receita ainda não carregada (`lojas_receita` não existe): 503 com mensagem amigável
 
 ---
 
@@ -707,7 +708,7 @@ A função `validateLead(d)` classifica cada empresa com base em dados de CNPJ:
 | `bloqueado` | 🚫 Bloqueado | Nome com palavra bloqueada OU CNAE `4520006` | Vermelho |
 | `filtrado` | ⚠️ MEI | `is_mei === true` | Amarelo |
 | `comprador` | ℹ️ Frotista/Comprador | CNAE `4930202` (transporte rodoviário) | Azul |
-| `novo` | 🆕 Lead Novo | Modo vendedores + abertura < 24 meses | Verde brilhante |
+| `novo` | 🆕 Lead Novo | CNAE vendedor + aberta nos últimos 3 anos (desde 1º/jan de `ANO_NOVAS`) | Verde brilhante |
 | `aprovado` | ✅ Vendedor Confirmado | CNAE em `CNAE_VENDEDOR` | Verde |
 | `potencial` | ⚠️ Verificar | Porte ME/EPP sem CNAE definitivo | Amarelo |
 | `indefinido` | ℹ️ Não Mapeado | Nenhum critério se aplicou | Cinza |
@@ -715,17 +716,35 @@ A função `validateLead(d)` classifica cada empresa com base em dados de CNPJ:
 **CNAEs Mapeados:**
 
 ```javascript
-CNAE_VENDEDOR  = ['4530701', '4530702']  // Comércio de pneus (atacado e varejo)
+CNAE_VENDEDOR  = ['4530702', '4530705']  // Comércio de pneus: atacado (02) e varejo (05) — autopeças fica de fora
 CNAE_COMPRADOR = ['4930202']              // Transporte rodoviário de cargas
 CNAE_BLOQUEADO = ['4520006']              // Serviços de borracharia
 ```
 
 ### 8.4. Identificação de Leads Novos
 
-Uma empresa é marcada como **Lead Novo** quando:
-1. O sistema está no modo **Vendedores**
-2. A data de abertura (extraída do CNPJ) existe
-3. A diferença entre hoje e a data de abertura é menor que **24 meses**
+Uma empresa é marcada como **Lead Novo** quando o CNAE é de comércio de pneus e ela foi
+aberta nos **últimos 3 anos** (ano atual e os dois anteriores — `ANO_NOVAS` no frontend).
+
+### 8.4.1. Lojas novas da Receita Federal
+
+A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) **ativas**, abertas nos
+últimos 3 anos, sem MEI e sem borracharia/recapagem no nome. Origem: dados abertos do CNPJ da
+Receita (publicados 1x por mês).
+
+- **Atualização:** `scripts/atualizar_receita.py`, rodado pelo GitHub Actions
+  (`.github/workflows/atualizar-receita.yml`) nos dias 10 e 25, ou à mão pelo botão *Run workflow*.
+  Baixa ~6,5 GB, filtra e **substitui** a lista (upsert por CNPJ + remove o que não está na base nova).
+  Se a lista nova vier com menos da metade das lojas atuais, nada é alterado (proteção contra base corrompida).
+  Teste local sem gravar: `python scripts/atualizar_receita.py --teste saida.csv`.
+- **Cruzamento com o Google** (`POST /api/receita-match`): cada card é comparado com as lojas do mesmo
+  **CEP**; bate se o **número** do endereço é igual ou o **nome** é parecido. Empate entre dois candidatos
+  não marca nada. O card ganha borda verde, etiqueta "🆕 Loja nova — aberta em mm/aaaa", CNPJ e abertura.
+- **Aba Leads Novos:** cards do Google ainda não registrados (os da Receita primeiro) + seção
+  "Novas na Receita (sem Google)" (`GET /api/receita-lojas`), com filtros de estado, cidade, ano e mês,
+  para o Brasil todo e sem precisar de busca. Lojas que já estão nos cards do Google ou no CRM
+  (`company_id = cnpj:<número>`) não se repetem.
+- **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.
 
 ### 8.5. Deduplicação de Resultados
 
