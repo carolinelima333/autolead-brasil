@@ -1,4 +1,4 @@
-"""Atualiza a tabela lojas_receita com as lojas de pneus abertas nos últimos 3 anos.
+"""Atualiza a tabela lojas_receita com as lojas de pneus e os frotistas abertos nos últimos 3 anos.
 
 Fonte: dados abertos do CNPJ da Receita Federal (publicados uma vez por mês).
 Roda sozinho pelo GitHub Actions (.github/workflows/atualizar-receita.yml) ou à mão:
@@ -39,7 +39,8 @@ RF_WEBDAV = 'https://arquivos.receitafederal.gov.br/public.php/webdav/'
 RF_SHARE = (RF_LINK_PUBLICO.rstrip('/').rsplit('/', 1)[-1], '')
 
 # 4530-7/02 atacado e 4530-7/05 varejo de pneumáticos e câmaras de ar (autopeças fica de fora)
-CNAES = {'4530702', '4530705'}
+# 4930-2/02 transporte rodoviário de carga intermunicipal (frotistas/compradores, mesmo CNAE_COMPRADOR da tela)
+CNAES = {'4530702', '4530705', '4930202'}
 ATIVA = '02'
 # Mesmas exclusões da validação de lead do sistema
 NOMES_BLOQUEADOS = ('BORRACHARIA', 'BORRACHAS', 'BORRACHEIRO', 'REFORMA DE PNEU',
@@ -247,7 +248,7 @@ def main() -> int:
 
     mes = args.mes or mes_mais_recente()
     ano_min = date.today().year - 2
-    log(f'Base da Receita: {mes} — lojas de pneus ativas abertas desde {ano_min}')
+    log(f'Base da Receita: {mes} — lojas de pneus e frotistas ativos abertos desde {ano_min}')
     with tempfile.TemporaryDirectory() as pasta:
         rows = montar(mes, pasta, ano_min)
     log(f'Total: {len(rows)} loja(s)')

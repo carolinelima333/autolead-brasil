@@ -726,10 +726,11 @@ CNAE_BLOQUEADO = ['4520006']              // Serviços de borracharia
 Uma empresa é marcada como **Lead Novo** quando o CNAE é de comércio de pneus e ela foi
 aberta nos **últimos 3 anos** (ano atual e os dois anteriores — `ANO_NOVAS` no frontend).
 
-### 8.4.1. Lojas novas da Receita Federal
+### 8.4.1. Lojas e frotistas novos da Receita Federal
 
-A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) **ativas**, abertas nos
-últimos 3 anos, sem MEI e sem borracharia/recapagem no nome. Origem: dados abertos do CNPJ da
+A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) e os frotistas
+(CNAE 4930-2/02, transporte rodoviário de carga — o mesmo `CNAE_COMPRADOR` da validação de lead)
+**ativos**, abertos nos últimos 3 anos, sem MEI e sem borracharia/recapagem no nome. O tipo sai da coluna `cnae`. Origem: dados abertos do CNPJ da
 Receita (publicados 1x por mês).
 
 - **Atualização:** `scripts/atualizar_receita.py`, rodado pelo GitHub Actions
@@ -739,9 +740,11 @@ Receita (publicados 1x por mês).
   Teste local sem gravar: `python scripts/atualizar_receita.py --teste saida.csv`.
 - **Cruzamento com o Google** (`POST /api/receita-match`): cada card é comparado com as lojas do mesmo
   **CEP**; bate se o **número** do endereço é igual ou o **nome** é parecido. Empate entre dois candidatos
-  não marca nada. O card ganha borda verde, etiqueta "🆕 Loja nova — aberta em mm/aaaa", CNPJ e abertura.
+  não marca nada. O card ganha borda verde, etiqueta "🆕 Loja nova — aberta em mm/aaaa" (ou "🆕 Frotista novo"),
+  CNPJ e abertura. Vale para as buscas de lojas e de frotistas.
 - **Filtro Leads Novos (aba Buscar):** cards do Google ainda não registrados, com os da Receita primeiro.
-- **Aba Lojas Novas** (`ctab = 'r'`, `GET /api/receita-lojas`): lojas da Receita com filtros de estado
+- **Aba Lojas Novas** (`ctab = 'r'`, `GET /api/receita-lojas?tipo=lojas|frotistas`): empresas da Receita
+  com filtros de tipo (Lojas de pneus / Frotistas — começa pelo modo da última busca), estado
   (ou Brasil todo), cidade, ano e mês, sem precisar de busca. Lojas que já estão nos cards do Google
   ou no CRM (`company_id = cnpj:<número>`) não se repetem.
 - **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.

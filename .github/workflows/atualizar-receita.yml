@@ -1,4 +1,4 @@
-# Atualiza a tabela lojas_receita (lojas de pneus abertas nos últimos 3 anos)
+# Atualiza a tabela lojas_receita (lojas de pneus e frotistas abertos nos últimos 3 anos)
 # com a base de CNPJ da Receita Federal, publicada uma vez por mês.
 # Roda nos dias 10 e 25 e também pelo botão "Run workflow" na aba Actions do GitHub.
 # Precisa do Secret SUPABASE_SERVICE_KEY (Settings → Secrets and variables → Actions).

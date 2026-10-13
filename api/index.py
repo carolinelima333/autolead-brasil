@@ -593,6 +593,8 @@ def api_cnpj():
 _RF_COLS = ('cnpj,razao_social,nome_fantasia,data_abertura,cnae,logradouro,numero,'
             'complemento,bairro,cep,municipio,uf,telefone,referencia')
 _RF_PAGE = 30
+# Tipos da tabela: lojas de pneus (atacado/varejo) e frotistas (transporte rodoviário de carga)
+_RF_TIPOS = {'lojas': 'in.(4530702,4530705)', 'frotistas': 'eq.4930202'}
 _RF_MAX_ITENS = 300
 _CEP_RE = re.compile(r'\b(\d{5})-?(\d{3})\b')
 _NUM_RE = re.compile(r'^[^,]*,\s*(\d{1,6})\b')
@@ -632,13 +634,16 @@ def _rf_erro(resp):
 
 @app.route('/api/receita-lojas')
 def api_receita_lojas():
-    """Lista paginada das lojas novas da Receita, com filtros de local e de ano/mês de abertura."""
+    """Lista paginada das empresas novas da Receita (lojas ou frotistas), com filtros de local e de ano/mês."""
     err = _require_user()
     if err:
         return err
     uf = request.args.get('uf', '').strip().upper()
     if uf and uf not in _CAPITAIS:
         return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
+    tipo = request.args.get('tipo', 'lojas')
+    if tipo not in _RF_TIPOS:
+        return jsonify({'ok': False, 'error': 'Tipo inválido'}), 400
     cidade = re.sub(r"[^A-Z '\-]", '', _norm(request.args.get('cidade', '')))[:60].strip()
     try:
         ano  = int(request.args.get('ano') or 0)
@@ -652,7 +657,7 @@ def api_receita_lojas():
     excluir = [c for c in request.args.get('excluir', '').split(',') if len(c) == 14 and c.isdigit()][:_RF_MAX_ITENS]
 
     params = {'select': _RF_COLS, 'order': 'data_abertura.desc,cnpj',
-              'limit': _RF_PAGE, 'offset': page * _RF_PAGE}
+              'limit': _RF_PAGE, 'offset': page * _RF_PAGE, 'cnae': _RF_TIPOS[tipo]}
     if uf:
         params['uf'] = f'eq.{uf}'
     if cidade:
@@ -701,7 +706,7 @@ def api_receita_match():
     candidatos: dict[str, list[dict]] = {}
     try:
         for i in range(0, len(ceps), 100):
-            params = {'select': 'cnpj,razao_social,nome_fantasia,data_abertura,numero,cep,telefone',
+            params = {'select': 'cnpj,razao_social,nome_fantasia,data_abertura,cnae,numero,cep,telefone',
                       'cep': f'in.({",".join(ceps[i:i + 100])})'}
             if uf in _CAPITAIS:
                 params['uf'] = f'eq.{uf}'
@@ -744,7 +749,7 @@ def api_receita_match():
         if pid not in matches or nota > matches[pid][0]:
             matches[pid] = (nota, row)
     return jsonify({'ok': True, 'matches': {
-        pid: {k: row.get(k) for k in ('cnpj', 'razao_social', 'nome_fantasia', 'data_abertura', 'telefone')}
+        pid: {k: row.get(k) for k in ('cnpj', 'razao_social', 'nome_fantasia', 'data_abertura', 'cnae', 'telefone')}
         for pid, (nota, row) in matches.items()
     }})
 
