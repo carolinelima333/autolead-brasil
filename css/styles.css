@@ -164,7 +164,7 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 /* Cards */
 .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem}
 .results-header .count{font-size:13px;color:var(--txt2)}
-.results-header .count span{color:#fff;font-weight:700}
+.results-header .count span{color:var(--txt);font-weight:700}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .cc{background:var(--g2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem;transition:all .2s;position:relative;overflow:hidden}
 .cc:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
