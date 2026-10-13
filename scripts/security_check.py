@@ -94,7 +94,7 @@ for m in re.finditer(r"@app\.route\([^)]*\)\s*\ndef (\w+)\(.*?\):\n(.*?)(?=\n@ap
     nome, corpo = m.group(1), m.group(2)
     if nome not in PUBLICAS and '_require_user()' not in corpo and '_require_admin()' not in corpo:
         erros.append(f'api/index.py: rota {nome}() sem _require_user()/_require_admin() — '
-                     'qualquer pessoa poderia chamá-la (e gastar a cota do Google).')
+                     'qualquer pessoa poderia chamá-la.')
 for n, linha in enumerate(py.splitlines(), 1):
     if re.search(r"jsonify\(.*str\((e|exc|err)\)", linha):
         erros.append(f'api/index.py:{n} — resposta expõe detalhe interno do erro (str(exc)).')

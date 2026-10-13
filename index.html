@@ -25,9 +25,8 @@
       <h1>AutoLead Brasil</h1>
       <div class="tagline">Prospecção Automotiva Profissional</div>
       <div class="auth-feats">
-        <div class="auth-feat"><div class="dot"></div>Busca por cidade e/ou estado</div>
-        <div class="auth-feat"><div class="dot"></div>Resultados salvos no banco de dados</div>
-        <div class="auth-feat"><div class="dot"></div>Data de abertura via CNPJ</div>
+        <div class="auth-feat"><div class="dot"></div>Lojas e frotistas novos da Receita Federal</div>
+                <div class="auth-feat"><div class="dot"></div>Data de abertura via CNPJ</div>
         <div class="auth-feat"><div class="dot"></div>Contato direto pelo WhatsApp</div>
         <div class="auth-feat"><div class="dot"></div>Exportação de leads em CSV</div>
         <div class="auth-feat"><div class="dot"></div>Registro de lojas e status de contato</div>
@@ -85,21 +84,13 @@
       <div class="close-drawer" onclick="closeDrawer()">✕</div>
     </div>
     <div class="drawer-nav">
-      <div class="drawer-ni on" id="dnb" onclick="go('b');closeDrawer()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Buscar Empresas
-      </div>
-      <div class="drawer-ni" id="dnr" onclick="go('r');closeDrawer()">
+      <div class="drawer-ni on" id="dnr" onclick="go('r');closeDrawer()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
         Lojas Novas
       </div>
       <div class="drawer-ni" id="dnf" onclick="go('f');closeDrawer()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         Favoritos
-      </div>
-      <div class="drawer-ni" id="dnh" onclick="go('h');closeDrawer()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Histórico
       </div>
       <div class="drawer-ni" id="dns" onclick="go('s');closeDrawer()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -132,17 +123,11 @@
       </div>
       <nav class="nav">
         <div class="nav-section">Menu</div>
-        <div class="ni on" id="nb" onclick="go('b')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Buscar Empresas
-        </div>
-        <div class="ni" id="nr" onclick="go('r')">
+        <div class="ni on" id="nr" onclick="go('r')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>Lojas Novas
         </div>
         <div class="ni" id="nf" onclick="go('f')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Favoritos
-        </div>
-        <div class="ni" id="nh" onclick="go('h')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico
         </div>
         <div class="ni" id="ns" onclick="go('s')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Lojas
@@ -167,21 +152,13 @@
   <!-- Bottom navigation (mobile) -->
   <div class="bot-nav">
     <div class="bot-nav-inner">
-      <div class="bnav-item on" id="bnb" onclick="go('b')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Buscar
-      </div>
-      <div class="bnav-item" id="bnr" onclick="go('r')">
+      <div class="bnav-item on" id="bnr" onclick="go('r')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
         Novas
       </div>
       <div class="bnav-item" id="bnf" onclick="go('f')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         Favs
-      </div>
-      <div class="bnav-item" id="bnh" onclick="go('h')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Histórico
       </div>
       <div class="bnav-item" id="bns" onclick="go('s')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -264,11 +241,6 @@
 // ─── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iaWdmcmRlemtvenp3cW96dmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDk2NjAsImV4cCI6MjA5MzQ4NTY2MH0.LWKWOvpIjkdd1w8aoAvixfNrpa1TuoX3B0mZ90_gXhM';
-// Busca no Google (aba Buscar, Histórico e chamadas pagas) desligada a pedido da usuária: a prospecção
-// passa a ser pela base da Receita (aba Lojas Novas). Para religar: true aqui e BUSCA_GOOGLE no api/index.py.
-const BUSCA_GOOGLE = false;
-const TERMS_VENDEDORES  = ['distribuidora de pneus','atacadista de pneus','loja de pneus','revenda de pneus','pneus truck center'];
-const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviario','logistica transporte cargas'];
 
 // 4530-7/02 atacado e 4530-7/05 varejo de pneumáticos (autopeças fica de fora)
 const CNAE_VENDEDOR  = ['4530702','4530705'];
@@ -288,29 +260,20 @@ const rfSelo = (cnae, iso) => {
 const CNAE_BLOQUEADO = ['4520006'];
 
 const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
-const MAX_DAILY = 10;
-const CACHE_TTL_DAYS = 7;
 
 // ─── ESTADO ───────────────────────────────────────────────────
 let sb = null;
-let user = null, signup = false, ctab = BUSCA_GOOGLE ? 'b' : 'r';
-let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'todos';
+let user = null, signup = false, ctab = 'r';
+let favs = new Set(), favData = new Map();
 const ADMIN_EMAIL = 'carolinelima313@gmail.com';
 const isAdmin = () => !!user && user.email.toLowerCase() === ADMIN_EMAIL;
-let cacheCtx = null; // { key, uf, cid } da busca atual — usado para salvar contatos carregados
-let searchMode = 'vendedores';
 let theme = localStorage.getItem('al_theme') || 'dark';
-let currentStoreIdx = undefined;
 let currentStoreId = null;
-let currentPage = 0;
-const PAGE_SIZE = 30;
-let dailyLimits = { vendedores: 0, compradores: 0 };
 let storeFilter = 'todos';
 let favSearch = '';
-// Seção "Novas na Receita" da aba Leads Novos
+// Aba Lojas Novas (base da Receita)
 let rf = { tipo: '', uf: '', cidade: '', ano: '', mes: '', page: 0, rows: [], total: 0, pageSize: 30, carregado: false, carregando: false, erro: '' };
 const rfRows = new Map();      // cnpj -> linha da Receita exibida (para WhatsApp/Registrar)
-const rfVistos = new WeakSet(); // cards do Google já cruzados com a Receita nesta sessão
 
 const STATUS_MAP = {
   contato:       { label: 'Em contato',          cls: 'badge-blue' },
@@ -326,7 +289,7 @@ async function authHeaders() {
   try { const { data: { session } } = await sb.auth.getSession(); return session ? { 'Authorization': 'Bearer ' + session.access_token } : {}; }
   catch(e) { return {}; }
 }
-// Escapa texto vindo de fora (Google, bases de CNPJ, usuário) antes de ir para innerHTML
+// Escapa texto vindo de fora (Receita, bases de CNPJ, usuário) antes de ir para innerHTML
 const escH = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 // Para argumentos de onclick="fn('...')": remove aspas/barras e escapa o resto
 const escJs = s => escH(String(s ?? '').replace(/['"\\`]/g, ''));
@@ -514,38 +477,12 @@ async function enterApp(authUser) {
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
   const isAdm = isAdmin();
   ['na','dna','bna'].forEach(id => { const el = g(id); if (el) el.style.display = isAdm ? '' : 'none'; });
-  ['nb','dnb','bnb','nh','dnh','bnh'].forEach(id => { const el = g(id); if (el) el.style.display = BUSCA_GOOGLE ? '' : 'none'; });
   if (isAdm) refreshAdminCount();
   loadFavs();
-  loadDailyLimits();
-  loadStores().then(list => {
-    window._storesList = list;
-    if (ctab === 'b' && filterType === 'novo') exibir();
-  });
+  // Lojas já registradas não se repetem na lista da Receita
+  window._storesList = await loadStores();
   avisoReceita();
-  if (BUSCA_GOOGLE) await autoRestoreLastSearch();
-  go('b');
-}
-
-async function autoRestoreLastSearch() {
-  if (!sb || !user) return;
-  try {
-    const { data } = await sb.from('search_history')
-      .select('id, results, mode, state, city, searched_at')
-      .eq('user_email', user.email)
-      .order('searched_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data || !data.results || !data.results.length) return;
-    cos = data.results;
-    cos.forEach((c, i) => c._idx = i);
-    cacheCtx = null;
-    searchMode = data.mode || 'vendedores';
-    await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
-    await cruzarReceita(data.state, cos);
-    currentPage = 0;
-    filterType = 'todos';
-  } catch(e) { console.warn('[autoRestore]', e); }
+  go('r');
 }
 
 // ─── LOGOUT POR INATIVIDADE ───────────────────────────────────
@@ -590,8 +527,7 @@ function stopIdleWatch() {
 async function logout() {
   stopIdleWatch();
   if (sb) await sb.auth.signOut().catch(() => {});
-  user = null; cos = []; cacheCtx = null; rf = { ...rf, tipo: '', uf: '', cidade: '', ano: '', mes: '', page: 0, rows: [], total: 0, carregado: false, erro: '' }; rfRows.clear(); favs = new Set(); favData = new Map(); hist = []; filterType = 'todos';
-  dailyLimits = { vendedores: 0, compradores: 0 };
+  user = null; rf = { ...rf, tipo: '', uf: '', cidade: '', ano: '', mes: '', page: 0, rows: [], total: 0, carregado: false, erro: '' }; rfRows.clear(); favs = new Set(); favData = new Map();
   g('sc-main').style.display = 'none';
   g('sc-auth').style.display = 'flex';
   g('ie').value = ''; g('ip').value = '';
@@ -600,19 +536,16 @@ async function logout() {
 }
 
 // ─── NAVEGAÇÃO ────────────────────────────────────────────────
-const TABS = ['b','r','f','h','e','s','a'];
+const TABS = ['r','f','e','s','a'];
 function go(t) {
-  if (!BUSCA_GOOGLE && (t === 'b' || t === 'h')) t = 'r';
   ctab = t;
   TABS.forEach(x => ['n','dn','bn'].forEach(p => { const el = g(p+x); if(el) el.classList.toggle('on', x===t); }));
   render();
 }
 function render() {
   const c = g('mc');
-  if (ctab==='b') pBuscar(c);
-  else if (ctab==='r') pReceita(c);
+  if (ctab==='r') pReceita(c);
   else if (ctab==='f') pFavs(c);
-  else if (ctab==='h') pHist(c);
   else if (ctab==='e') pExp(c);
   else if (ctab==='s') pStores(c);
   else if (ctab==='a' && isAdmin()) pAdmin(c);
@@ -710,161 +643,6 @@ async function admReset(userId, email) {
   } catch(e) { showToast('Erro: ' + e.message, 'red'); }
 }
 
-// ─── PÁGINA DE BUSCA ──────────────────────────────────────────
-function pBuscar(c) {
-  const opts = '<option value="">— Estado —</option>' + UFS.map(u => `<option value="${u}">${u}</option>`).join('');
-  c.innerHTML = `
-    <div class="page-header"><h1>Buscar Empresas</h1><p>Dados do Google Places — resultados salvos no banco para consulta rápida</p></div>
-    <div class="stats-bar">
-      <div class="stat"><div class="num">${cos.length}</div><div class="lbl">Empresas</div></div>
-      <div class="stat"><div class="num">${favs.size}</div><div class="lbl">Favoritas</div></div>
-      <div class="stat"><div class="num">${hist.length}</div><div class="lbl">Buscas</div></div>
-      <div class="stat"><div class="num">${cos.filter(x=>x.abertura).length}</div><div class="lbl">c/ Abertura</div></div>
-    </div>
-    <div class="search-panel">
-      <h3>🔍 Pesquise aqui</h3>
-      <div class="mode-selector">
-        <button class="mode-btn${searchMode==='vendedores'?' active':''}" onclick="setSearchMode('vendedores')">🏪 Lojas &amp; Atacadistas<span class="mode-count${dailyLimits.vendedores>=MAX_DAILY?' mode-count-full':''}">${dailyLimits.vendedores}/${MAX_DAILY}</span></button>
-        <button class="mode-btn${searchMode==='compradores'?' active':''}" onclick="setSearchMode('compradores')">🚛 Frotistas / Compradores<span class="mode-count${dailyLimits.compradores>=MAX_DAILY?' mode-count-full':''}">${dailyLimits.compradores}/${MAX_DAILY}</span></button>
-      </div>
-      <div class="srow">
-        <select id="suf">${opts}</select>
-        <input id="scid" placeholder="Cidade (opcional — vazio busca todo o estado)" autocomplete="off"/>
-        <button class="bsc" id="bbs" onclick="buscar()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          Buscar agora
-        </button>
-      </div>
-      <div class="type-pills">
-        <span class="pill ${filterType==='todos'?'active':''}" onclick="setFilter('todos')">Todos</span>
-        <span class="pill ${filterType==='atacado'?'active':''}" onclick="setFilter('atacado')">📦 Atacadistas</span>
-        <span class="pill ${filterType==='loja'?'active':''}" onclick="setFilter('loja')">🔵 Lojas de Pneus</span>
-        <span class="pill ${filterType==='frotista'?'active':''}" onclick="setFilter('frotista')">🚛 Frotistas</span>
-        <span class="pill ${filterType==='novo'?'active':''}" onclick="setFilter('novo')">🆕 Leads Novos</span>
-        <span class="pill ${filterType==='nova'?'active':''}" onclick="setFilter('nova')">✨ Novas nesta busca</span>
-      </div>
-    </div>
-    <div class="cnpj-panel">
-      <h3>📋 Consultar CNPJ — data de abertura</h3>
-      <div class="cnpj-row">
-        <input id="icnpj" placeholder="00.000.000/0001-00" maxlength="18" inputmode="numeric" oninput="maskCNPJ(this)" onkeydown="if(event.key==='Enter')qCNPJ()"/>
-        <button class="bcnpj" id="bcnpjbtn" onclick="qCNPJ()">Consultar</button>
-      </div>
-      <div id="cres" class="cnpj-result"></div>
-    </div>
-    <div id="res"></div>`;
-  if (cos.length > 0) exibir();
-}
-function setFilter(t) { filterType = t; pBuscar(g('mc')); }
-function setSearchMode(mode) { searchMode = mode; pBuscar(g('mc')); }
-
-// ─── SUPABASE: RATE LIMIT ─────────────────────────────────────
-async function loadDailyLimits() {
-  if (!sb || !user) return;
-  const today = new Date().toISOString().split('T')[0];
-  try {
-    const { data } = await sb.from('search_limits')
-      .select('search_key,count').eq('user_email', user.email)
-      .eq('search_date', today).in('search_key', ['vendedores','compradores']);
-    dailyLimits = { vendedores: 0, compradores: 0 };
-    (data || []).forEach(r => { if (r.search_key in dailyLimits) dailyLimits[r.search_key] = r.count; });
-    if (ctab === 'b') render();
-  } catch(e) {}
-}
-async function checkRateLimit(modeKey) {
-  if (!sb || !user) return { ok: true, count: 0 };
-  const today = new Date().toISOString().split('T')[0];
-  try {
-    const { data } = await sb.from('search_limits')
-      .select('count').eq('user_email', user.email)
-      .eq('search_key', modeKey).eq('search_date', today).maybeSingle();
-    const count = data ? data.count : 0;
-    return { ok: count < MAX_DAILY, count };
-  } catch(e) { return { ok: true, count: 0 }; }
-}
-async function incrementRateLimit(modeKey) {
-  if (!sb || !user) return;
-  const today = new Date().toISOString().split('T')[0];
-  try {
-    const { data } = await sb.from('search_limits')
-      .select('id,count').eq('user_email', user.email)
-      .eq('search_key', modeKey).eq('search_date', today).maybeSingle();
-    if (data) {
-      await sb.from('search_limits').update({ count: data.count + 1 }).eq('id', data.id);
-      dailyLimits[modeKey] = data.count + 1;
-    } else {
-      await sb.from('search_limits').insert({ user_email: user.email, search_key: modeKey, search_date: today, count: 1 });
-      dailyLimits[modeKey] = 1;
-    }
-  } catch(e) { console.warn('Rate limit:', e); }
-}
-
-// ─── SUPABASE: CACHE / HISTÓRICO ──────────────────────────────
-async function checkCache(searchKey) {
-  if (!sb || !user) return null;
-  try {
-    const { data, error } = await sb.from('searches')
-      .select('results,updated_at').eq('user_email', user.email).eq('search_key', searchKey).maybeSingle();
-    if (error) { console.warn('[cache] leitura:', error.message); return null; }
-    if (!data || !data.results) return null;
-    const ageDays = (Date.now() - new Date(data.updated_at).getTime()) / 86400000;
-    return ageDays > CACHE_TTL_DAYS ? null : data.results;
-  } catch(e) { console.warn('[cache] checkCache:', e); return null; }
-}
-async function saveToCache(searchKey, uf, city, results) {
-  if (!sb || !user) { showToast('Supabase não conectado — dados não salvos', 'red'); return; }
-  try {
-    const { error } = await sb.from('searches').upsert(
-      { user_email: user.email, search_key: searchKey, state: uf, city: city || null, results, updated_at: new Date().toISOString() },
-      { onConflict: 'user_email,search_key' }
-    );
-    if (error) throw error;
-  } catch(e) {
-    console.error('[cache] saveToCache:', e);
-    showToast('Erro ao salvar no banco: ' + (e.message || e), 'red');
-  }
-}
-
-// Marca as empresas que não estavam na pesquisa anterior da mesma região e modo.
-// Usa só o histórico já salvo no Supabase — nenhuma chamada extra ao Google.
-async function markNovasBusca(uf, city, mode, list, before) {
-  list.forEach(c => { delete c._novaBusca; delete c._novaDesde; });
-  if (!sb || !user || !list.length) return;
-  try {
-    let q = sb.from('search_history')
-      .select('results, searched_at')
-      .eq('user_email', user.email).eq('state', uf).eq('mode', mode || 'vendedores')
-      .lt('searched_at', before || new Date().toISOString())
-      .order('searched_at', { ascending: false }).limit(1);
-    q = city ? q.ilike('city', city) : q.is('city', null);
-    const { data, error } = await q.maybeSingle();
-    if (error) throw error;
-    if (!data || !Array.isArray(data.results)) return; // primeira pesquisa da região
-    const prevIds = new Set(data.results.map(r => r.id).filter(Boolean));
-    list.forEach(c => {
-      if (c.id && !prevIds.has(c.id)) { c._novaBusca = true; c._novaDesde = data.searched_at; }
-    });
-  } catch(e) { console.warn('[novas] comparação:', e); }
-}
-
-async function saveToHistory(uf, city, mode, results) {
-  if (!sb || !user) return;
-  try {
-    const { error } = await sb.from('search_history').insert({
-      user_email:   user.email,
-      state:        uf,
-      city:         city || null,
-      mode,
-      result_count: results.length,
-      results,
-      searched_at:  new Date().toISOString()
-    });
-    if (error) throw error;
-  } catch(e) {
-    console.error('[history] saveToHistory:', e);
-  }
-}
-
 // ─── SUPABASE: FAVORITOS ──────────────────────────────────────
 async function loadFavs() {
   if (!sb || !user) return;
@@ -880,251 +658,7 @@ async function loadFavs() {
   } catch(e) { console.warn('[favs] loadFavs:', e); }
 }
 
-// ─── CHAMADAS AO BACKEND ──────────────────────────────────────
-async function apiBuscarTermo(uf, cidade, termo) {
-  const params = new URLSearchParams({ uf, query: termo });
-  if (cidade) params.set('cidade', cidade);
-  const r = await fetch('/api/buscar?' + params, { headers: await authHeaders() });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.error || 'Erro no servidor (' + r.status + ')');
-  }
-  const d = await r.json();
-  const denied = (d.errors || []).find(e => e.includes('REQUEST_DENIED') || e.includes('DENIED'));
-  if (denied) throw new Error('API Key recusada: ' + denied);
-  return d.results || [];
-}
-async function apiDetails(placeId) {
-  try {
-    const r = await fetch('/api/details?place_id=' + encodeURIComponent(placeId), { headers: await authHeaders() });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (d.status !== 'OK' || !d.result) return null;
-    const p = d.result;
-    return {
-      id: p.place_id, nome: p.name || '', endereco: p.formatted_address || '',
-      cidade: '', uf: '', telefone: p.formatted_phone_number || '',
-      avaliacao: p.rating ? p.rating.toFixed(1) : '—',
-      tipo: detectTipo(p.types || [], p.name || ''),
-      lat: p.geometry?.location?.lat || null, lon: p.geometry?.location?.lng || null,
-      abertura: null, gmaps_url: p.url || '', website: p.website || '',
-    };
-  } catch(e) { return null; }
-}
-function detectTipo(types, nome) {
-  const n = (nome || '').toLowerCase();
-  if (n.includes('distribuidora') || n.includes('atacadista') || n.includes('atacado de pneu')) return 'Atacadista de Pneus';
-  if (n.includes('pneu') || n.includes('tyre') || n.includes('tire') || n.includes('revenda de pneu')) return 'Loja de Pneus';
-  if (n.includes('transport') || n.includes('frete') || n.includes('logística') || n.includes('logistica') || n.includes('frota')) return 'Frotista / Transportadora';
-  if (n.includes('borracharia') || n.includes('borracha')) return 'Borracharia';
-  if (n.includes('auto center') || n.includes('autocenter')) return 'Auto Center';
-  if (types.includes('car_repair')) return 'Auto Center';
-  return 'Comércio Automotivo';
-}
-
-function textToCard(p, idx) {
-  const nome = p.name || '';
-  const rating = p.rating;
-  return {
-    _idx: idx,
-    id: p.place_id || '',
-    nome,
-    endereco: p.formatted_address || '',
-    cidade: '', uf: '',
-    telefone: p.phone || '',
-    website:  p.website || '',
-    avaliacao: rating != null ? parseFloat(rating).toFixed(1) : '—',
-    tipo: detectTipo(p.place_types || [], nome),
-    lat: null, lon: null,
-    abertura: null,
-    gmaps_url: '',
-    _detailsLoaded: !!(p.phone || p.website),
-  };
-}
-
-async function loadDetails(co) {
-  const details = await apiDetails(co.id);
-  if (details) {
-    co.telefone  = details.telefone  || '';
-    co.website   = details.website   || '';
-    co.gmaps_url = details.gmaps_url || '';
-    co.lat       = details.lat;
-    co.lon       = details.lon;
-  }
-  co._detailsLoaded = true;
-  if (cos[co._idx] !== co) return; // lista mudou (nova busca) — card não está mais na tela
-  const cardEl = document.querySelector(`.cc[data-idx="${co._idx}"]`);
-  if (cardEl) cardEl.replaceWith(mkCard(co));
-}
-
-// Telefone/site só sob demanda: cada Place Details é uma chamada paga ao Google.
-// Depois de carregado, atualiza o cache da busca para não pagar de novo.
-async function verContato(idx) {
-  const co = cos[idx];
-  if (!co || co._detailsLoaded || co._detailsLoading || !co.id) return;
-  co._detailsLoading = true;
-  const btn = g('vc_' + idx);
-  if (btn) { btn.disabled = true; btn.textContent = '⌛ Carregando contato...'; }
-  const ctx = cacheCtx;
-  await loadDetails(co);
-  delete co._detailsLoading;
-  if (ctx && ctx === cacheCtx) await saveToCache(ctx.key, ctx.uf, ctx.cid, cos);
-}
-
-// ─── BUSCAR ───────────────────────────────────────────────────
-async function buscar() {
-  if (!BUSCA_GOOGLE) return;
-  const uf = g('suf').value;
-  const cid = (g('scid').value || '').trim();
-  if (!uf) { alert('Selecione o estado.'); return; }
-
-  const baseKey    = cid ? `${uf}_${cid.replace(/\s+/g,'_').toLowerCase()}` : uf;
-  const searchKey  = `${baseKey}_${searchMode}`;
-  const modeLabel  = searchMode === 'compradores' ? '🚛 Frotistas' : '🏪 Lojas & Atacadistas';
-  const displayLoc = cid ? `${cid}, ${uf}` : `${uf} (estado inteiro)`;
-
-  const limit = await checkRateLimit(searchMode);
-  if (!limit.ok) {
-    const modeLabel = searchMode === 'compradores' ? '🚛 Frotistas / Compradores' : '🏪 Lojas & Atacadistas';
-    g('res').innerHTML = `<div class="empty"><div class="ei">🚫</div><p style="color:var(--red);font-weight:700">Limite de buscas atingido</p><small>Você atingiu o limite máximo de <strong>${MAX_DAILY} buscas</strong> para <strong>${modeLabel}</strong> hoje.<br>Tente novamente amanhã ou aguarde a atualização do seu plano.</small></div>`;
-    return;
-  }
-
-  g('bbs').disabled = true;
-  g('res').innerHTML = `
-    <div class="ld">
-      <div class="spin"></div>
-      <div style="color:var(--txt);font-weight:600;margin-bottom:.3rem">Buscando em ${displayLoc}...</div>
-      <div style="font-size:12px;color:var(--txt3)">Consultando Google Places</div>
-      <div class="prog-bar"><div class="prog-fill" id="prog" style="width:5%"></div></div>
-      <div class="prog-text" id="progtxt">Verificando banco de dados...</div>
-    </div>`;
-
-  const setP = (pct, txt) => {
-    const pf = g('prog'); if (pf) pf.style.width = pct + '%';
-    const pt = g('progtxt'); if (pt) pt.textContent = txt;
-  };
-
-  try {
-    setP(10, 'Verificando banco de dados...');
-    const cached = await checkCache(searchKey);
-    if (cached && cached.length > 0) {
-      cos = cached;
-      cos.forEach((c, i) => c._idx = i);
-      cacheCtx = { key: searchKey, uf, cid };
-      hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, fromCache: true });
-      setP(90, 'Cruzando com a base da Receita...');
-      await cruzarReceita(uf, cos);
-      setP(100, 'Carregado do banco!');
-      setTimeout(() => exibir(), 350);
-      g('bbs').disabled = false;
-      return;
-    }
-
-    setP(20, 'Buscando no Google Places...');
-    const allResults = [], seenIds = new Set();
-    const termos = searchMode === 'compradores' ? TERMS_COMPRADORES : TERMS_VENDEDORES;
-
-    for (let i = 0; i < termos.length; i++) {
-      const termo = termos[i];
-      setP(20 + Math.round((i / termos.length) * 60), 'Buscando "' + termo + '"...');
-      try {
-        const items = await apiBuscarTermo(uf, cid, termo);
-        for (const p of items) {
-          if (!seenIds.has(p.place_id)) { seenIds.add(p.place_id); allResults.push(p); }
-        }
-      } catch(e) {
-        if (e.message.includes('recusada') || e.message.includes('DENIED')) throw e;
-      }
-    }
-
-    if (allResults.length === 0) {
-      cos = [];
-      hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: 0, mode: searchMode });
-      await incrementRateLimit(searchMode);
-      g('res').innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa encontrada em ${displayLoc}.</p><small>Tente outra cidade ou verifique se a Places API está ativada na chave do servidor.</small></div>`;
-      g('bbs').disabled = false;
-      return;
-    }
-
-    setP(85, `Processando ${allResults.length} resultados...`);
-    cos = allResults.map((p, i) => textToCard(p, i));
-    cacheCtx = { key: searchKey, uf, cid };
-    currentPage = 0;
-
-    setP(90, 'Comparando com a pesquisa anterior...');
-    await markNovasBusca(uf, cid, searchMode, cos);
-    setP(92, 'Cruzando com a base da Receita...');
-    await cruzarReceita(uf, cos);
-
-    setP(95, 'Salvando no banco...');
-    await incrementRateLimit(searchMode);
-    await saveToCache(searchKey, uf, cid, cos);
-    await saveToHistory(uf, cid, searchMode, cos);
-    hist.push({ uf, cidade: cid, data: new Date().toLocaleString('pt-BR'), qtd: cos.length, mode: searchMode });
-    setP(100, 'Concluído!');
-    setTimeout(() => exibir(), 300);
-
-  } catch(e) {
-    g('res').innerHTML = `
-      <div class="empty">
-        <div class="ei">⚠️</div>
-        <p style="color:var(--red);font-weight:700">Erro ao buscar dados</p>
-        <small style="line-height:1.8">${e.message || 'Erro desconhecido'}<br>Verifique se o servidor está rodando.</small>
-      </div>`;
-  }
-  g('bbs').disabled = false;
-}
-
-// ─── EXIBIR (paginado) ────────────────────────────────────────
-function exibir() {
-  const el = g('res'); if (!el) return;
-  let lista = cos;
-  if      (filterType === 'atacado')  lista = cos.filter(x => x.tipo === 'Atacadista de Pneus');
-  else if (filterType === 'loja')     lista = cos.filter(x => x.tipo === 'Loja de Pneus');
-  else if (filterType === 'frotista') lista = cos.filter(x => x.tipo === 'Frotista / Transportadora');
-  else if (filterType === 'nova')     lista = cos.filter(x => x._novaBusca);
-  else if (filterType === 'novo') {
-    const registradas = new Set((window._storesList || []).map(s => s.company_id).filter(Boolean));
-    // Lojas abertas nos últimos 3 anos (cruzadas com a Receita) vêm primeiro
-    lista = cos.filter(x => x.id && !registradas.has(x.id)).sort((a, b) => (b._rf ? 1 : 0) - (a._rf ? 1 : 0));
-  }
-
-  const total = lista.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (currentPage >= totalPages) currentPage = 0;
-  const start = currentPage * PAGE_SIZE;
-  const pagina = lista.slice(start, start + PAGE_SIZE);
-
-  el.innerHTML = `
-    <div class="results-header">
-      <div class="count"><span>${total}</span> empresa${total!==1?'s':''} encontrada${total!==1?'s':''}</div>
-      ${totalPages > 1 ? `<div class="page-info">Página ${currentPage+1} de ${totalPages}</div>` : ''}
-    </div>`;
-
-  const novas = cos.filter(x => x._novaBusca);
-  if (novas.length && filterType !== 'nova') {
-    const desde = new Date(novas[0]._novaDesde).toLocaleDateString('pt-BR');
-    el.innerHTML += `<div class="novas-info" onclick="setFilter('nova')">✨ <strong>${novas.length}</strong> loja${novas.length!==1?'s':''} nova${novas.length!==1?'s':''} desde a pesquisa de ${desde} — marcada${novas.length!==1?'s':''} com borda verde. <u>Ver só as novas</u></div>`;
-  }
-  const qtdRf = cos.filter(x => x._rf).length;
-  if (filterType === 'novo') {
-    el.innerHTML += `<div class="novas-info" onclick="go('r')">🆕 Empresas desta busca ainda não registradas. As abertas desde ${ANO_NOVAS} (base da Receita) têm borda verde e vêm primeiro. <u>Ver empresas novas que não estão no Google</u></div>`;
-  } else if (qtdRf) {
-    el.innerHTML += `<div class="novas-info" onclick="setFilter('novo')">🆕 <strong>${qtdRf}</strong> empresa${qtdRf!==1?'s':''} desta busca aberta${qtdRf!==1?'s':''} desde ${ANO_NOVAS} (base da Receita) — borda verde. <u>Ver em Leads Novos</u></div>`;
-  }
-
-  if (!pagina.length) {
-    el.innerHTML += `<div class="empty"><div class="ei">🔍</div><p>Nenhuma empresa nesta categoria.</p><small>Tente outro filtro.</small></div>`;
-  } else {
-    const gr = document.createElement('div'); gr.className = 'grid';
-    pagina.forEach(x => gr.appendChild(mkCard(x)));
-    el.appendChild(gr);
-    if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
-  }
-}
-
-function mkPagination(current, total, fn = 'setPage') {
+function mkPagination(current, total, fn) {
   const nav = document.createElement('div'); nav.className = 'pagination';
   const pages = [];
   if (total <= 7) {
@@ -1148,154 +682,27 @@ function mkPagination(current, total, fn = 'setPage') {
   return nav;
 }
 
-function setPage(n) {
-  currentPage = n;
-  exibir();
-  const el = g('res'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ─── CARD ─────────────────────────────────────────────────────
-function mkCard(co) {
-  const d = document.createElement('div'); d.className = co._novaBusca || co._rf ? 'cc cc-nova' : 'cc';
-  const idx = co._idx !== undefined ? co._idx : 0;
-  d.dataset.idx = idx;
-  const iF = favs.has(co.id);
-  const rat = parseFloat(co.avaliacao) || 0;
-  const st = '★'.repeat(Math.round(rat)) + '☆'.repeat(5 - Math.round(rat));
-  const aHTML = co.abertura
-    ? `<div class="cc-since">📅 Aberta desde ${fmtData(co.abertura)} · ${calcIdade(co.abertura)}</div>`
-    : `<div class="cc-no-since" id="abe_${idx}">📅 Data de abertura — consulte o CNPJ</div>`;
-
-  const phoneHtml = co.telefone
-    ? `<div class="cc-phone">📞 ${escH(co.telefone)}</div>`
-    : co._detailsLoaded
-      ? `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não disponível</div>`
-      : `<button class="ab ab-contato" id="vc_${idx}" onclick="verContato(${idx})">📞 Ver contato</button>`;
-
-  const mapsBtn = co.gmaps_url
-    ? linkBtn(co.gmaps_url, '🗺 Maps')
-    : co.lat ? `<button class="ab" onclick="openMap(${+co.lat},${+co.lon})">🗺 Mapa</button>` : '';
-  const siteBtn = linkBtn(co.website, '🌐 Site');
-  const wppBtn  = co.telefone ? `<button class="ab wpp" onclick="wppIdx(${idx})">💬 WhatsApp</button>` : '';
-
-  const leadBadge = co._isNovo
-    ? `<span class="badge-novo">🆕 Lead Novo</span>`
-    : co._leadStatus === 'bloqueado' ? `<span class="badge-bad">🚫 Descartado</span>`
-    : co._leadStatus === 'comprador' ? `<span class="badge-blue">🚛 Frotista</span>`
-    : co._leadStatus === 'aprovado'  ? `<span class="badge-ok">✅ Aprovado</span>`
-    : '';
-
-  d.innerHTML = `
-    <div class="cc-top">
-      <div class="cc-name">${escH(co.nome)}</div>
-      <div class="cc-rating"><div class="stars">${st}</div><div class="rnum">${escH(co.avaliacao)}</div></div>
-    </div>
-    ${leadBadge || co._novaBusca || co._rf ? `<div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap">${co._rf ? `<span class="badge-nova" title="Base da Receita Federal · CNPJ ${escH(fmtCnpj(co.cnpj))}">${escH(rfSelo(co._rf.cnae, co._rf.abertura))}</span>` : ''}${co._novaBusca ? `<span class="badge-nova" title="Não apareceu na pesquisa de ${new Date(co._novaDesde).toLocaleDateString('pt-BR')}">✨ Nova nesta busca</span>` : ''}${leadBadge}</div>` : ''}
-    <div class="cc-type">${escH(co.tipo)}</div>
-    <div class="cc-addr">📍 ${escH(co.endereco)}${co.cidade?', '+escH(co.cidade):''}${co.uf?'/'+escH(co.uf):''}</div>
-    ${phoneHtml}
-    ${aHTML}
-    <hr class="cc-sep"/>
-    <div class="cacts">
-      ${mapsBtn}${siteBtn}${wppBtn}
-      <button class="ab ${iF?'fva':''}" id="fv_${idx}" onclick="tgFav(${idx})">${iF?'★ Salvo':'☆ Favoritar'}</button>
-      <button class="ab ${co.abertura?'cnpj-loaded':''}" onclick="tgCNPJ(${idx})" id="cbtn_${idx}">${co.abertura?'✅ CNPJ':'🔎 CNPJ'}</button>
-      <button class="ab ab-store" onclick="openStoreModal(${idx})">📋 Registrar</button>
-    </div>
-    <div class="cnpj-inline" id="ci_${idx}">
-      <p>Informe o CNPJ para buscar a data de abertura:</p>
-      <div class="cinp-row">
-        <input id="cv_${idx}" placeholder="00.000.000/0001-00" maxlength="18" inputmode="numeric" oninput="maskCNPJ(this)" onkeydown="if(event.key==='Enter')bCNPJCard(${idx})"/>
-        <button onclick="bCNPJCard(${idx})">Buscar</button>
-      </div>
-      <div class="cinp-result" id="cr_${idx}"></div>
-    </div>`;
-  return d;
-}
-async function tgFav(idx) {
-  const co = cos[idx]; if (!co) return;
-  const isFav = favs.has(co.id);
-  if (isFav) {
-    favs.delete(co.id); favData.delete(co.id);
-    if (sb && user) {
-      const { error } = await sb.from('favorites').delete()
-        .eq('user_email', user.email).eq('place_id', co.id);
-      if (error) { favs.add(co.id); favData.set(co.id, co); showToast('Erro ao remover favorito', 'red'); return; }
-    }
-  } else {
-    favs.add(co.id); favData.set(co.id, co);
-    if (sb && user) {
-      const { error } = await sb.from('favorites').upsert(
-        { user_email: user.email, place_id: co.id, company_data: co },
-        { onConflict: 'user_email,place_id' }
-      );
-      if (error) { favs.delete(co.id); favData.delete(co.id); showToast('Erro ao salvar favorito', 'red'); return; }
-    }
-    showToast('Favorito salvo!');
-  }
-  const b = g('fv_'+idx); if (!b) return;
-  b.textContent = favs.has(co.id) ? '★ Salvo' : '☆ Favoritar';
-  b.classList.toggle('fva', favs.has(co.id));
-}
-
-async function unfavById(placeId) {
-  favs.delete(placeId); favData.delete(placeId);
-  if (sb && user) {
-    const { error } = await sb.from('favorites').delete()
-      .eq('user_email', user.email).eq('place_id', placeId);
-    if (error) { showToast('Erro ao remover favorito', 'red'); return; }
-  }
-  const i = cos.findIndex(c => c.id === placeId);
-  if (i >= 0) { const b = g('fv_'+i); if (b) { b.textContent = '☆ Favoritar'; b.classList.remove('fva'); } }
-  if (ctab === 'f') pFavs(g('mc'));
-}
-function tgCNPJ(idx) {
-  const f = g('ci_'+idx); if (!f) return;
-  f.style.display = f.style.display === 'block' ? 'none' : 'block';
-}
-function wppIdx(idx) { const co = cos[idx]; if (co) wpp(co.telefone, co.nome); }
-
 // ─── LOJAS NOVAS (base da Receita) ────────────────────────────
-// A tabela é atualizada 2x por mês pelo GitHub Actions. Tudo aqui consulta só o
-// nosso banco — nenhuma chamada ao Google.
-
-// Marca os cards do Google que batem com uma loja nova da Receita (mesmo CEP + número/nome).
-async function cruzarReceita(uf, list) {
-  const pend = list.filter(c => c.id && !rfVistos.has(c)).slice(0, 300);
-  if (!pend.length) return;
-  try {
-    const r = await fetch('/api/receita-match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ uf, itens: pend.map(c => ({ id: c.id, nome: c.nome, endereco: c.endereco })) }),
-    });
-    if (!r.ok) return; // base ainda não carregada ou fora do ar: os cards seguem normais
-    const { matches = {} } = await r.json();
-    pend.forEach(c => {
-      rfVistos.add(c);
-      const m = matches[c.id];
-      if (!m) { delete c._rf; return; }
-      rf.carregado = false; // a lista da Receita precisa sair sem as lojas que já estão no Google
-      c.cnpj = m.cnpj;
-      if (!c.abertura) c.abertura = m.data_abertura;
-      // Borda verde e selo "nova" só para as abertas nos últimos 3 anos (a base vai até ANO_RECEITA)
-      if (abertaRecente(m.data_abertura)) c._rf = { abertura: m.data_abertura, cnae: m.cnae };
-      else delete c._rf;
-    });
-  } catch(e) { console.warn('[receita] cruzamento:', e); }
-}
+// A tabela é atualizada 2x por mês pelo GitHub Actions. Tudo aqui consulta só o nosso banco.
 
 function pReceita(c) {
   c.innerHTML = `
     <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus e frotistas ativos abertos desde ${ANO_RECEITA} — base oficial da Receita Federal. Os abertos desde ${ANO_NOVAS} levam o selo 🆕.</p></div>
+    <div class="cnpj-panel">
+      <h3>📋 Consultar CNPJ — data de abertura</h3>
+      <div class="cnpj-row">
+        <input id="icnpj" placeholder="00.000.000/0001-00" maxlength="18" inputmode="numeric" oninput="maskCNPJ(this)" onkeydown="if(event.key==='Enter')qCNPJ()"/>
+        <button class="bcnpj" id="bcnpjbtn" onclick="qCNPJ()">Consultar</button>
+      </div>
+      <div id="cres" class="cnpj-result"></div>
+    </div>
     <div id="rf-sec"></div>`;
   renderRfSec();
 }
 
 function renderRfSec() {
   const el = g('rf-sec'); if (!el) return;
-  if (!rf.carregado && !rf.carregando && !rf.erro && !rf.uf && cacheCtx) rf.uf = cacheCtx.uf || '';
-  if (!rf.tipo) rf.tipo = searchMode === 'compradores' ? 'frotistas' : 'lojas';
+  if (!rf.tipo) rf.tipo = 'lojas';
   const frota = rf.tipo === 'frotistas';
   const ufOpts = '<option value="">Brasil todo</option>' + UFS.map(u => `<option value="${u}"${rf.uf===u?' selected':''}>${u}</option>`).join('');
   const anoAtual = new Date().getFullYear();
@@ -1306,7 +713,7 @@ function renderRfSec() {
   el.innerHTML = `
     <div class="search-panel rf-panel">
       <h3>🔍 Filtrar empresas da Receita</h3>
-      <p class="rf-sub">${frota ? 'Frotistas e transportadoras (transporte rodoviário de carga), sem MEI' : 'Atacado e varejo de pneus, sem MEI e sem borracharias'}${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. ${BUSCA_GOOGLE ? 'As empresas que já aparecem na sua busca atual (com borda verde nos cards) ou que já foram registradas' : 'As empresas já registradas'} não se repetem aqui.</p>
+      <p class="rf-sub">${frota ? 'Frotistas e transportadoras (transporte rodoviário de carga), sem MEI' : 'Atacado e varejo de pneus, sem MEI e sem borracharias'}${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. As empresas já registradas não se repetem aqui.</p>
       <div class="srow">
         <select id="rf-tipo"><option value="lojas"${frota?'':' selected'}>🏪 Lojas de pneus</option><option value="frotistas"${frota?' selected':''}>🚛 Frotistas / Compradores</option></select>
         <select id="rf-uf">${ufOpts}</select>
@@ -1337,8 +744,8 @@ function rfPage(n) {
 
 // Filtros da aba Lojas Novas — usados na lista da tela e na exportação (aba Exportar)
 function rfParams(page) {
-  // Não repete lojas que já estão nos cards do Google ou registradas no CRM
-  const excluir = new Set(BUSCA_GOOGLE ? cos.map(c => c.cnpj).filter(Boolean) : []);
+  // Não repete lojas já registradas no CRM
+  const excluir = new Set();
   (window._storesList || []).forEach(s => { if ((s.company_id || '').startsWith('cnpj:')) excluir.add(s.company_id.slice(5)); });
   const params = new URLSearchParams({ tipo: rf.tipo || 'lojas', page });
   if (rf.uf) params.set('uf', rf.uf);
@@ -1422,7 +829,7 @@ function rfWpp(cnpj) {
 // Registra no CRM com company_id "cnpj:<número>" — some da lista da Receita depois de salvo
 function rfRegistrar(cnpj) {
   const x = rfRows.get(cnpj); if (!x) return;
-  openStoreModal(undefined);
+  openStoreModal();
   const titulo = s => (s || '').toLowerCase().replace(/(^|\s)\S/g, ch => ch.toUpperCase());
   const set = (id, v) => { const el = g(id); if (el) el.value = v || ''; };
   set('st-nome', titulo(x.nome_fantasia || x.razao_social));
@@ -1470,52 +877,6 @@ function maskCNPJ(inp) {
   else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d+)$/,'$1.$2.$3');
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d+)$/,'$1.$2');
   inp.value = v;
-}
-async function bCNPJCard(idx) {
-  const inp = g('cv_'+idx), res = g('cr_'+idx);
-  if (!inp || !res) return;
-  const raw = inp.value.replace(/\D/g,'');
-  if (raw.length !== 14) { res.textContent = '⚠ CNPJ precisa ter 14 dígitos.'; res.style.display = 'block'; return; }
-  res.innerHTML = '<span class="spin-sm"></span> Consultando...'; res.style.display = 'block';
-  try {
-    const d = await fetchCNPJ(raw);
-    const co = cos[idx];
-    const lead = validateLead(d);
-    const isNovo = abertaRecente(d.data_inicio_atividade);
-    if (co) {
-      co.abertura     = d.data_inicio_atividade || null;
-      co.cnpj         = raw;
-      co.porte        = d.porte || '';
-      co.cnae         = d.cnae || '';
-      co.cnae_code    = d.cnae_code || '';
-      co._leadStatus  = lead.status;
-      co._isNovo      = isNovo;
-    }
-    const ok = (d.situacao||'').toLowerCase().includes('ativa');
-    const situBadge = ok ? '<span class="badge-ok">● Ativa</span>' : `<span class="badge-bad">● ${escH(d.situacao||'Inativa')}</span>`;
-    res.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-        ${situBadge}
-        <span class="${lead.cls}">${lead.label}</span>
-        ${isNovo ? `<span class="badge-novo">🆕 Aberta desde ${ANO_NOVAS}</span>` : ''}
-      </div>
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${lead.msg}</div>
-      <strong>${fmtData(d.data_inicio_atividade)}</strong> · ${calcIdade(d.data_inicio_atividade)}<br>
-      <span style="font-size:10px;color:var(--txt3)">${escH(d.razao_social)} · Porte: ${escH(d.porte||'—')} · CNAE: ${escH(d.cnae_code||'—')} ${d.cnae?'('+escH(d.cnae.substring(0,45))+')':''}</span>`;
-    const abeEl = g('abe_'+idx);
-    if (abeEl && d.data_inicio_atividade) abeEl.outerHTML = `<div class="cc-since">📅 Aberta desde ${fmtData(d.data_inicio_atividade)} · ${calcIdade(d.data_inicio_atividade)}</div>`;
-    const cbtn = g('cbtn_'+idx);
-    if (cbtn) {
-      cbtn.textContent = isNovo ? '🆕 Lead Novo' : lead.status === 'bloqueado' ? '🚫 CNPJ' : lead.status === 'aprovado' ? '✅ CNPJ' : '📋 CNPJ';
-      cbtn.classList.add('cnpj-loaded');
-    }
-    if (isNovo || lead.status === 'aprovado' || lead.status === 'bloqueado') {
-      const cardEl = document.querySelector(`.cc[data-idx="${idx}"]`);
-      if (cardEl) cardEl.replaceWith(mkCard(co));
-    }
-  } catch(e) {
-    res.innerHTML = `<span style="color:var(--red)">⚠ ${escH(e.message || 'CNPJ não encontrado. Verifique o número.')}</span>`;
-  }
 }
 async function qCNPJ() {
   const raw = g('icnpj').value.replace(/\D/g,'');
@@ -1586,12 +947,10 @@ async function fetchCNPJ(raw) {
 
 // ─── FAVORITOS ────────────────────────────────────────────────
 function pFavs(c) {
-  const map = new Map(favData);
-  cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
-  let fs = Array.from(map.values());
+  let fs = Array.from(favData.values());
 
   c.innerHTML = `
-    <div class="page-header"><h1>Favoritos</h1><p>${map.size} empresa${map.size!==1?'s':''} salva${map.size!==1?'s':''} — persistido no banco</p></div>
+    <div class="page-header"><h1>Favoritos</h1><p>${fs.length} empresa${fs.length!==1?'s':''} salva${fs.length!==1?'s':''} — persistido no banco</p></div>
     <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
       <div class="srow">
         <input id="fav-srch" placeholder="Filtrar por nome, tipo ou endereço..." value="${favSearch.replace(/"/g,'&quot;')}" oninput="setFavSearch(this.value)" autocomplete="off"/>
@@ -1602,7 +961,7 @@ function pFavs(c) {
   if (q) fs = fs.filter(x => (x.nome||'').toLowerCase().includes(q) || (x.endereco||'').toLowerCase().includes(q) || (x.tipo||'').toLowerCase().includes(q));
 
   if (!fs.length) {
-    c.innerHTML += `<div class="empty"><div class="ei">${favSearch?'🔍':'⭐'}</div><p>${favSearch?'Nenhum favorito encontrado.':'Nenhum favorito ainda.'}</p><small>${favSearch?'Tente outro termo de busca.':'Favorite empresas na aba de busca.'}</small></div>`;
+    c.innerHTML += `<div class="empty"><div class="ei">${favSearch?'🔍':'⭐'}</div><p>${favSearch?'Nenhum favorito encontrado.':'Nenhum favorito ainda.'}</p><small>${favSearch?'Tente outro termo de busca.':'Nenhuma empresa marcada como favorita.'}</small></div>`;
     return;
   }
   const gr = document.createElement('div'); gr.className = 'grid';
@@ -1610,6 +969,16 @@ function pFavs(c) {
   c.appendChild(gr);
 }
 function setFavSearch(v) { favSearch = v; pFavs(g('mc')); }
+
+async function unfavById(placeId) {
+  favs.delete(placeId); favData.delete(placeId);
+  if (sb && user) {
+    const { error } = await sb.from('favorites').delete()
+      .eq('user_email', user.email).eq('place_id', placeId);
+    if (error) { showToast('Erro ao remover favorito', 'red'); return; }
+  }
+  if (ctab === 'f') pFavs(g('mc'));
+}
 
 function mkFavCard(co) {
   const d = document.createElement('div'); d.className = 'cc';
@@ -1641,200 +1010,11 @@ function mkFavCard(co) {
   return d;
 }
 
-// ─── HISTÓRICO ────────────────────────────────────────────────
-async function pHist(c) {
-  c.innerHTML = `
-    <div class="page-header"><h1>Histórico de Pesquisas</h1><p>Clique em <strong>👁 Ver Resultados</strong> para visualizar tudo que a API retornou — sem chamar a API novamente</p></div>
-    <div id="hist-content"><div class="ld"><div class="spin"></div><div style="color:var(--txt2)">Carregando...</div></div></div>`;
-
-  let supaHist = [];
-  if (sb) {
-    try {
-      const { data } = await sb.from('search_history')
-        .select('id, state, city, mode, result_count, searched_at')
-        .eq('user_email', user.email)
-        .order('searched_at', { ascending: false })
-        .limit(300);
-      supaHist = data || [];
-    } catch(e) { console.warn('Hist load:', e); }
-  }
-
-  const el = g('hist-content'); if (!el) return;
-  if (!supaHist.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🕐</div><p>Nenhuma busca ainda.</p><small>Faça sua primeira pesquisa na aba Buscar.</small></div>`;
-    return;
-  }
-
-  window._histData = supaHist;
-
-  const states = [...new Set(supaHist.map(h => h.state).filter(Boolean))].sort();
-  const stateOpts = '<option value="">Todos os estados</option>' + states.map(s => `<option value="${escH(s)}">${escH(s)}</option>`).join('');
-  const allCities = [...new Set(supaHist.map(h => h.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  const cityOpts  = '<option value="">Todas as cidades</option>' + allCities.map(c => `<option value="${escH(c)}">${escH(c)}</option>`).join('');
-
-  el.innerHTML = `
-    <div class="search-panel" style="padding:.9rem 1.1rem;margin-bottom:1rem">
-      <div class="srow">
-        <select id="hist-state-f" onchange="filterHist(true)" style="max-width:180px">
-          ${stateOpts}
-        </select>
-        <select id="hist-city-f" onchange="filterHist()" style="max-width:200px">
-          ${cityOpts}
-        </select>
-        <select id="hist-mode-f" onchange="filterHist()" style="max-width:220px">
-          <option value="">Todos os tipos</option>
-          <option value="vendedores">🏪 Lojas & Atacadistas</option>
-          <option value="compradores">🚛 Frotistas</option>
-        </select>
-        <button class="ab" onclick="clearHistAll()" style="color:var(--red);border-color:rgba(239,68,68,.3);margin-left:auto;white-space:nowrap">🗑 Limpar tudo</button>
-      </div>
-    </div>
-    <div id="hist-items"></div>`;
-  renderHistItems(supaHist);
-}
-
-function filterHist(stateChanged) {
-  const sf = (g('hist-state-f')?.value || '').toUpperCase();
-  const mf = g('hist-mode-f')?.value || '';
-  const citySelect = g('hist-city-f');
-
-  // Ao trocar estado, recalcula as cidades disponíveis e reseta seleção
-  if (stateChanged && citySelect) {
-    const allData = window._histData || [];
-    const cities = [...new Set(
-      allData
-        .filter(h => !sf || (h.state||'').toUpperCase() === sf)
-        .map(h => h.city)
-        .filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-    citySelect.innerHTML = '<option value="">Todas as cidades</option>' +
-      cities.map(c => `<option value="${escH(c)}">${escH(c)}</option>`).join('');
-  }
-
-  const cf = citySelect?.value || '';
-  let list = window._histData || [];
-  if (sf) list = list.filter(h => (h.state||'').toUpperCase() === sf);
-  if (cf) list = list.filter(h => h.city === cf);
-  if (mf) list = list.filter(h => h.mode === mf);
-  renderHistItems(list);
-}
-
-function renderHistItems(list) {
-  const el = g('hist-items'); if (!el) return;
-  if (!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma busca encontrada com este filtro.</p></div>`;
-    return;
-  }
-  const w = document.createElement('div'); w.className = 'hist-list';
-  list.forEach(h => {
-    const d = document.createElement('div'); d.className = 'hi';
-    const loc        = h.city ? `${escH(h.city)} — ${escH(h.state)}` : `${escH(h.state)} (estado inteiro)`;
-    const qtd        = h.result_count ?? '—';
-    const dt         = h.searched_at ? new Date(h.searched_at).toLocaleString('pt-BR') : '';
-    const canRestore = (h.result_count || 0) > 0;
-    const hMode      = h.mode || 'vendedores';
-    const safeId     = escJs(h.id);
-    const safeState  = escJs(h.state);
-    const safeCity   = escJs(h.city);
-    const modeBadge  = hMode === 'compradores'
-      ? `<span class="hi-mode-badge hi-mode-comp">🚛 Frotistas</span>`
-      : `<span class="hi-mode-badge hi-mode-vend">🏪 Lojas & Atacadistas</span>`;
-    d.innerHTML = `
-      <div style="flex:1;min-width:0">
-        <div class="hi-city">${loc}</div>
-        <div style="margin-top:3px">${modeBadge}</div>
-        <div class="hi-dt">🕐 ${dt}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-        <div style="text-align:right"><div class="hi-count">${qtd}</div><div class="hi-lbl">resultados</div></div>
-        <div style="display:flex;gap:5px">
-          ${canRestore
-            ? `<button class="ab hist-restore" onclick="viewHistoryEntry('${safeId}')" title="Ver resultados salvos sem chamar a API">👁 Ver Resultados</button>`
-            : `<button class="ab" onclick="rebuscar('${safeState}','${safeCity}','${escJs(hMode)}')" style="font-size:12px" title="Refazer esta busca na API">🔄 Pesquisar</button>`}
-          <button class="ab hist-del" onclick="deleteHistoryEntry('${safeId}')">🗑</button>
-        </div>
-      </div>`;
-    w.appendChild(d);
-  });
-  el.innerHTML = '';
-  el.appendChild(w);
-}
-
-async function clearHistAll() {
-  if (!confirm('Limpar TODO o histórico de pesquisas? Esta ação não pode ser desfeita.')) return;
-  if (!sb) return;
-  try {
-    const { error } = await sb.from('search_history').delete().eq('user_email', user.email);
-    if (error) throw error;
-    hist = [];
-    window._histData = [];
-    showToast('Histórico limpo.');
-    pHist(g('mc'));
-  } catch(e) { showToast('Erro ao limpar: ' + (e.message || e), 'red'); }
-}
-
-async function viewHistoryEntry(id) {
-  if (!sb || !user) return;
-  showToast('Carregando resultados...');
-  try {
-    const { data, error } = await sb.from('search_history')
-      .select('results, mode, state, city, searched_at')
-      .eq('id', id)
-      .eq('user_email', user.email)
-      .single();
-    if (error || !data || !data.results || !data.results.length) {
-      showToast('Resultados não encontrados no banco.', 'red');
-      return;
-    }
-    cos = data.results;
-    cos.forEach((c, i) => c._idx = i);
-    cacheCtx = null;
-    searchMode = data.mode || 'vendedores';
-    await markNovasBusca(data.state, data.city, searchMode, cos, data.searched_at);
-    await cruzarReceita(data.state, cos);
-    currentPage = 0;
-    filterType = 'todos';
-    const loc = data.city ? `${data.city} — ${data.state}` : data.state;
-    showToast(`${cos.length} empresa${cos.length !== 1 ? 's' : ''} carregada${cos.length !== 1 ? 's' : ''} — ${loc}`);
-    go('b');
-  } catch(e) {
-    showToast('Erro ao carregar resultados.', 'red');
-    console.error('[history] viewHistoryEntry:', e);
-  }
-}
-
-function rebuscar(state, city, mode) {
-  go('b');
-  searchMode = mode || 'vendedores';
-  setTimeout(() => {
-    const ufSel = g('suf');
-    const cidEl = g('scid');
-    if (ufSel) ufSel.value = state;
-    if (cidEl)  cidEl.value = city || '';
-    buscar();
-  }, 150);
-}
-
-async function deleteHistoryEntry(id) {
-  if (!confirm('Excluir este registro do histórico?')) return;
-  if (!sb) { showToast('Supabase não conectado', 'red'); return; }
-  try {
-    const { error } = await sb.from('search_history').delete()
-      .eq('id', id).eq('user_email', user.email);
-    if (error) throw error;
-    showToast('Registro excluído.');
-    pHist(g('mc'));
-  } catch(e) {
-    showToast('Erro ao excluir: ' + (e.message || e), 'red');
-  }
-}
-
 // ─── EXPORTAR ─────────────────────────────────────────────────
 const RF_EXPORT_MAX = 60000; // a tabela inteira cabe (hoje ~50 mil)
 const PDF_MAX = 3000;        // acima disso o PDF trava o navegador — usar CSV/Excel
 
 function pExp(c) {
-  const ca = cos.filter(x=>x.abertura).length;
   const mk = (modo, lbl, desc, n, dis) => `
     <div class="export-card">
       <h3>${lbl}</h3>
@@ -1846,20 +1026,14 @@ function pExp(c) {
       </div>
     </div>`;
   const rfDesc = `Mesmos filtros da aba Lojas Novas: <strong>${escH(rfResumoFiltro())}</strong>. Exporta todas as páginas, não só as 30 da tela. <u style="cursor:pointer" onclick="go('r')">Alterar filtros</u>`;
-  const google = BUSCA_GOOGLE ? `
-      ${mk('todas','📊 Todas as empresas','Nome, tipo, telefone, endereço, avaliação e data de abertura.',cos.length,!cos.length)}
-      ${mk('abertura','📅 Com data de abertura','Empresas com data de abertura identificada via CNPJ.',ca,!ca)}` : '';
   c.innerHTML = `
     <div class="page-header"><h1>Exportar Relatórios</h1><p>Exporte seus leads em CSV, Excel ou PDF profissional.</p></div>
     <div class="stats-bar">
       <div class="stat"><div class="num">${rf.carregado ? rf.total : '—'}</div><div class="lbl">Lojas Novas (filtro)</div></div>
       <div class="stat"><div class="num">${favs.size}</div><div class="lbl">Favoritas</div></div>
-      ${BUSCA_GOOGLE ? `<div class="stat"><div class="num">${cos.length}</div><div class="lbl">Empresas</div></div>
-      <div class="stat"><div class="num">${hist.length}</div><div class="lbl">Buscas</div></div>` : ''}
     </div>
     <div class="export-wrap">
       ${mk('receita','🏛 Lojas Novas (Receita Federal)',rfDesc,rf.carregado ? rf.total : null,rf.carregado && !rf.total)}
-      ${google}
       ${mk('favs','⭐ Empresas favoritas','Apenas as empresas marcadas como favorita para prospecção prioritária.',favs.size,!favs.size)}
     </div>`;
 }
@@ -1893,15 +1067,10 @@ async function _exportData(modo, onProgress) {
         x.bairro, x.cep, x.municipio, x.uf]),
     };
   }
-  let lista = cos;
-  if (modo === 'favs') {
-    const map = new Map(favData);
-    cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
-    lista = Array.from(map.values());
-  } else if (modo === 'abertura') lista = cos.filter(x => x.abertura);
+  const lista = Array.from(favData.values());
   return {
-    titulo: {todas:'Todas as Empresas',favs:'Empresas Favoritas',abertura:'Empresas com Data de Abertura'}[modo] || modo,
-    arquivo: modo,
+    titulo: 'Empresas Favoritas',
+    arquivo: 'favs',
     cols: [['Nome',30,1],['Tipo',22,1],['Telefone',18,1],['Endereço',40,1],['Cidade',18,0],['Estado',7,1],['Avaliação',10,1],
            ['Data de Abertura',18,1],['Tempo de Atividade',22,0],['CNPJ',18,1],['Porte',15,0],['CNAE',40,0]],
     linhas: lista.map(c => [c.nome, c.tipo, c.telefone, c.endereco, c.cidade, c.uf, c.avaliacao,
@@ -2018,7 +1187,7 @@ async function pStores(c) {
   const el = g('stores-list'); if (!el) return;
 
   if (!lista.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🏪</div><p>Nenhuma loja registrada ainda.</p><small>Clique em "📋 Registrar" em um card de empresa ou em "+ Nova Loja" acima.</small></div>`;
+    el.innerHTML = `<div class="empty"><div class="ei">🏪</div><p>Nenhuma loja registrada ainda.</p><small>Clique em "📋 Registrar" em um card da aba Lojas Novas ou em "+ Nova Loja" acima.</small></div>`;
     return;
   }
 
@@ -2077,7 +1246,6 @@ function editStoreById(id) {
   const s = (window._storesList||[]).find(x => x.id === id);
   if (!s) return;
   currentStoreId = id;
-  currentStoreIdx = undefined;
   const fields = {
     'st-nome': s.company_name||'', 'st-tel': s.phone||'', 'st-end': s.address||'',
     'st-cid': s.city||'', 'st-uf': s.state||'', 'st-obs': s.notes||'', 'st-coid': s.company_id||''
@@ -2099,27 +1267,16 @@ async function loadStores() {
     return data || [];
   } catch(e) { console.warn('[stores] loadStores:', e); return []; }
 }
-function openStoreModal(idx) {
-  currentStoreIdx = idx;
+function openStoreModal() {
   currentStoreId = null;
-  const co = idx !== undefined ? cos[idx] : null;
   ['st-nome','st-tel','st-end','st-cid','st-uf','st-obs','st-coid'].forEach(id => { const el=g(id); if(el) el.value=''; });
   if (g('st-status')) g('st-status').value = 'contato';
-  if (co) {
-    if (g('st-nome')) g('st-nome').value = co.nome||'';
-    if (g('st-tel')) g('st-tel').value = co.telefone||'';
-    if (g('st-end')) g('st-end').value = co.endereco||'';
-    if (g('st-cid')) g('st-cid').value = co.cidade||'';
-    if (g('st-uf')) g('st-uf').value = co.uf||'';
-    if (g('st-coid')) g('st-coid').value = co.id||'';
-  }
   const h = g('modal-head-title'); if (h) h.textContent = '📋 Registrar Loja';
   const modal = g('modal-store'); if (modal) modal.style.display = 'flex';
   const err = g('st-err'); if (err) err.style.display = 'none';
 }
 function closeStoreModal() {
   const modal = g('modal-store'); if (modal) modal.style.display = 'none';
-  currentStoreIdx = undefined;
   currentStoreId = null;
   const h = g('modal-head-title'); if (h) h.textContent = '📋 Registrar Loja';
 }
@@ -2160,7 +1317,6 @@ async function submitStore() {
     }
     if ((storeData.company_id || '').startsWith('cnpj:')) rf.carregado = false; // recarrega a lista da Receita sem ela
     if (ctab === 's' || ctab === 'r') go(ctab);
-    else if (ctab === 'b' && filterType === 'novo') exibir();
   } catch(e) {
     console.error('[stores] submitStore:', e);
     const err = g('st-err'); if (err){ err.textContent='Erro: '+(e.message||'Tente novamente.'); err.style.display='block'; }
@@ -2238,7 +1394,6 @@ function fmtCnpj(c) {
   const v = String(c || '').replace(/\D/g, '');
   return v.length === 14 ? v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : v;
 }
-function openMap(lat,lon) { window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=17`,'_blank'); }
 function wpp(tel,nome) {
   const n = tel.replace(/\D/g,''), br = n.startsWith('55')?n:'55'+n;
   window.open(`https://wa.me/${br}?text=${encodeURIComponent('Olá '+nome+'! Entrei em contato pelo AutoLead Brasil. Gostaria de apresentar uma proposta comercial.')}`,'_blank');

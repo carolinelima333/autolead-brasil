@@ -1,27 +1,18 @@
 # AutoLead Brasil
 
-Plataforma web de prospecção de leads no setor automotivo (pneus), com busca via Google Places API, validação de CNPJ, CRM integrado e exportação de dados.
+Plataforma web de prospecção de leads no setor automotivo (pneus), com lojas e frotistas da base oficial da Receita Federal, validação de CNPJ, CRM integrado e exportação de dados. Não usa nenhuma API paga do Google.
 
 ---
 
 ## Funcionalidades
 
-> **Busca no Google desativada** (flag `BUSCA_GOOGLE` em `index.html` e `api/index.py`): a prospecção é feita
-> pela base da Receita, na aba **Lojas Novas**. As abas Buscar e Histórico ficam ocultas e `/api/buscar` e
-> `/api/details` respondem 503, sem nenhuma chamada paga. O código continua no projeto para religar.
-
-- Busca de empresas por estado ou cidade via Google Places API
-- Dois modos de busca: **Lojas & Atacadistas** e **Frotistas / Compradores**
-- Filtragem automática de borracharias (serviços de reparo)
-- Validação de CNPJ com 3 APIs em fallback (BrasilAPI, ReceitaWS, CNPJ.ws)
-- Identificação de leads novos (empresa aberta nos últimos 3 anos), com lojas e frotistas da Receita Federal (abertos desde 2010) atualizados automaticamente
-- Histórico permanente de pesquisas com filtros por estado e modo — restaura resultados sem consumir a API
-- Cache de resultados no Supabase (7 dias por busca)
+- Aba **Lojas Novas**: lojas de pneus e frotistas ativos da Receita Federal (abertos desde 2010), sem MEI e sem borracharias, com filtros por tipo, estado, cidade, ano e mês — base atualizada automaticamente 2x por mês
+- Selo de lead novo (empresa aberta nos últimos 3 anos)
+- Consulta de CNPJ com 3 APIs gratuitas em fallback (BrasilAPI, ReceitaWS, CNPJá)
 - Favoritos salvos por usuário no banco de dados, com busca textual
 - CRM: registro de lojas com tabs por status (Em contato / Retornar depois / Sem interesse / Concluído) e edição inline
 - Exportação de leads em CSV, Excel e PDF
 - Autenticação via Supabase (cadastro auto-confirmado, sem e-mail de verificação)
-- Limite diário de 10 buscas por localidade/modo por usuário
 - Tema claro/escuro, sidebar desktop + drawer mobile
 
 ---
@@ -29,7 +20,6 @@ Plataforma web de prospecção de leads no setor automotivo (pneus), com busca v
 ## Pré-requisitos
 
 - Python 3.8+
-- Conta no [Google Cloud](https://console.cloud.google.com) com **Places API** ativada
 - Projeto no [Supabase](https://supabase.com) com as tabelas criadas (veja `supabase_setup.sql`)
 
 ---
@@ -106,7 +96,7 @@ O sistema estará disponível em `http://localhost:3000`.
 
 ### Estrutura compatível
 
-- Arquivos estáticos (`index.html`, `css/`, `js/`) são servidos da raiz
+- Arquivos estáticos (`index.html`, `css/`) são servidos da raiz
 - A API Flask (`api/index.py`) roda como serverless function Python
 - O `vercel.json` roteia `/api/*` para `api/index.py`
 
@@ -151,10 +141,11 @@ autolead-brasil/
 │   └── index.py          # Backend Flask (serverless no Vercel)
 ├── css/
 │   └── styles.css        # Estilos — tema dark/light com CSS vars
-├── js/
-│   └── app.js            # Versão legada (JS inline em index.html é o ativo)
 ├── dist/                 # Ignorado pelo Vercel (.vercelignore)
 ├── index.html            # Frontend completo (JS inline)
+├── scripts/
+│   ├── atualizar_receita.py  # Carrega a base da Receita no Supabase (GitHub Actions)
+│   └── security_check.py     # Varredura de segurança (roda no pre-commit)
 ├── supabase_setup.sql    # Script SQL para criar tabelas e políticas no Supabase
 ├── requirements.txt      # Dependências Python
 ├── vercel.json           # Configuração de rotas e headers do Vercel
@@ -173,8 +164,11 @@ autolead-brasil/
 | Método | Rota | Parâmetros | Descrição |
 |--------|------|------------|-----------|
 | `POST` | `/api/register` | `email`, `password`, `name` | Cria usuário via Admin API do Supabase (auto-confirma e-mail) |
-| `GET`  | `/api/buscar` | `uf`, `query`, `cidade` (opcional), `max_cidades` (opcional) | Busca empresas via Google Places |
-| `GET`  | `/api/details` | `place_id` | Detalhes de uma empresa (telefone, site, coordenadas) |
+| `GET`  | `/api/cnpj` | `cnpj` | Consulta CNPJ nas bases públicas gratuitas |
+| `GET`  | `/api/receita-lojas` | `tipo`, `uf`, `cidade`, `ano`, `mes`, `page`, `excluir`, `exportar` (todos opcionais) | Lista paginada de lojas/frotistas da Receita |
+| `GET`  | `/api/receita-info` | — | Mês da base da Receita carregada |
+
+Todas, exceto `/api/register`, exigem usuário logado e aprovado (as rotas `/api/admin-*` são só da administradora).
 
 ---
 
@@ -182,11 +176,12 @@ autolead-brasil/
 
 | Tabela | Descrição |
 |--------|-----------|
-| `searches` | Cache de pesquisas por 7 dias — unique por `(user_email, search_key)` |
-| `search_history` | Histórico permanente de pesquisas — acumula todos os registros |
+| `lojas_receita` | Lojas de pneus e frotistas da Receita Federal (carregada por `scripts/atualizar_receita.py`) |
 | `stores` | CRM de lojas registradas — unique por `company_id` |
 | `favorites` | Favoritos por usuário — unique por `(user_email, place_id)` |
-| `search_limits` | Rate limit diário (10 buscas/dia por localidade/modo) |
+| `user_access` | Aprovação de cadastros e pedidos de reset de senha |
+
+> As tabelas `searches`, `search_history` e `search_limits` eram da antiga busca no Google e não são mais usadas pelo sistema.
 
 Todas as tabelas usam **Row Level Security (RLS)**: cada usuário acessa apenas seus próprios dados.
 
@@ -194,6 +189,5 @@ Todas as tabelas usam **Row Level Security (RLS)**: cada usuário acessa apenas 
 
 ## Observações
 
-- **Timeout no Vercel (plano gratuito):** o limite é 10 segundos por requisição. A busca por **cidade específica** é mais rápida e confiável do que busca por estado inteiro.
-- **Cache de resultados:** pesquisas repetidas na mesma localidade (dentro de 7 dias) não consomem a API do Google.
-- **Limite diário:** cada combinação de localidade/modo é limitada a 10 buscas por dia por usuário.
+- **Timeout no Vercel (plano gratuito):** o limite é 10 segundos por requisição.
+- **Custo:** o sistema não chama nenhuma API paga — só o Supabase e as bases públicas gratuitas de CNPJ.

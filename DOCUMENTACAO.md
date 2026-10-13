@@ -20,17 +20,17 @@
 
 ## 1. Visão Geral do Sistema
 
-**AutoLead Brasil** é uma plataforma web B2B para prospecção de leads no setor automotivo de pneus. O sistema permite que usuários autenticados busquem empresas vendedoras (distribuidoras, atacadistas e lojas de pneus) e empresas compradoras (transportadoras e frotistas) usando a Google Places API, validem os leads via consulta de CNPJ, gerenciem um CRM próprio e exportem os dados.
+**AutoLead Brasil** é uma plataforma web B2B para prospecção de leads no setor automotivo de pneus. O sistema permite que usuários autenticados e aprovados encontrem empresas vendedoras (atacado e varejo de pneus) e compradoras (transportadoras e frotistas) na base oficial da Receita Federal, validem os leads via consulta de CNPJ, gerenciem um CRM próprio e exportem os dados.
+
+O sistema **não usa nenhuma API paga** (a antiga busca no Google Places foi removida): só o Supabase e as bases públicas gratuitas de CNPJ.
 
 ### Objetivos do Sistema
 
-- Encontrar leads qualificados de pneus por estado e/ou cidade
-- Diferenciar automaticamente vendedores de compradores
-- Identificar empresas novas (abertas nos últimos 3 anos) como leads prioritários, cruzando com a base da Receita Federal
-- Bloquear empresas irrelevantes (borracharias, oficinas, etc.)
+- Listar lojas de pneus e frotistas ativos por estado, cidade, ano e mês de abertura
+- Identificar empresas novas (abertas nos últimos 3 anos) como leads prioritários
+- Bloquear empresas irrelevantes (MEI, borracharias, recapagem)
 - Validar e enriquecer dados via CNPJ
 - Gerenciar o relacionamento com leads em um CRM integrado
-- Reduzir custo de API via cache de 7 dias
 
 ---
 
@@ -85,26 +85,26 @@
 │  ┌─────────────────┐      ┌──────────────────────────┐  │
 │  │  index.html     │      │  api/index.py            │  │
 │  │  css/styles.css │      │  (Flask serverless)      │  │
-│  │  js/app.js      │      │                          │  │
-│  │  (estáticos)    │      │  POST /api/register      │  │
-│  └────────┬────────┘      │  GET  /api/buscar        │  │
-│           │               │  GET  /api/details       │  │
+│  │  (estáticos)    │      │  /api/register           │  │
+│  └────────┬────────┘      │  /api/cnpj               │  │
+│           │               │  /api/receita-lojas      │  │
+│           │               │  /api/receita-info       │  │
+│           │               │  /api/admin-*            │  │
 │           │               └──────────┬───────────────┘  │
 └───────────┼──────────────────────────┼──────────────────┘
-            │                          │
             │ Supabase JS SDK          │ Requests
             ▼                          ▼
 ┌───────────────────────┐   ┌──────────────────────────┐
-│     SUPABASE          │   │   GOOGLE PLACES API      │
-│  (PostgreSQL + Auth)  │   │  (Text Search + Details) │
-│                       │   └──────────────────────────┘
-│  searches             │
-│  search_history       │   ┌──────────────────────────┐
-│  stores               │   │   CNPJ APIs (fallback)   │
-│  favorites            │   │  BrasilAPI               │
-│  search_limits        │   │  ReceitaWS               │
-└───────────────────────┘   │  CNPJ.ws                 │
-                            └──────────────────────────┘
+│     SUPABASE          │   │   CNPJ APIs (gratuitas)  │
+│  (PostgreSQL + Auth)  │   │  BrasilAPI               │
+│  lojas_receita        │   │  ReceitaWS               │
+│  stores               │   │  CNPJá                   │
+│  favorites            │   └──────────────────────────┘
+│  user_access          │
+└───────────────────────┘
+        ▲
+        │ GitHub Actions (dias 10 e 25)
+  scripts/atualizar_receita.py ← dados abertos do CNPJ (Receita Federal)
 ```
 
 ### Estrutura de Arquivos
@@ -114,11 +114,12 @@ autolead_python/
 ├── api/
 │   └── index.py              # Backend Flask — serverless function
 ├── css/
-│   └── styles.css            # Estilos (492 linhas) — tema dark/light
-├── js/
-│   └── app.js                # Arquivo legado (JS ativo está inline no index.html)
+│   └── styles.css            # Estilos — tema dark/light
+├── scripts/
+│   ├── atualizar_receita.py  # Carrega a base da Receita no Supabase
+│   └── security_check.py     # Varredura de segurança (pre-commit)
 ├── dist/                     # Ignorado pelo Vercel
-├── index.html                # Frontend completo com JS inline (1677 linhas)
+├── index.html                # Frontend completo com JS inline
 ├── supabase_setup.sql        # Script de criação do banco de dados
 ├── requirements.txt          # Dependências Python
 ├── vercel.json               # Configuração de rotas e headers
@@ -137,44 +138,19 @@ autolead_python/
 
 O banco é gerenciado pelo **Supabase** (PostgreSQL hospedado). Todas as tabelas possuem **Row Level Security (RLS)** ativado, garantindo que cada usuário acesse apenas seus próprios dados.
 
-### 4.1. Tabela `searches` — Cache de Pesquisas
+### 4.1. Tabela `lojas_receita` — Base da Receita Federal
 
-Armazena os resultados das buscas por 7 dias para evitar retrabalho com a API do Google.
-
-```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_email  TEXT NOT NULL
-search_key  TEXT NOT NULL   -- chave composta: "SP_sao_paulo_vendedores"
-state       TEXT NOT NULL   -- UF (ex: "SP")
-city        TEXT            -- Cidade (pode ser null para busca por estado)
-results     JSONB           -- Array de empresas retornadas
-updated_at  TIMESTAMPTZ DEFAULT now()
-
-UNIQUE (user_email, search_key)
-```
-
-**Formato da `search_key`:** `{UF}_{cidade}_{modo}` → ex: `SP_sao_paulo_vendedores`
-
-**TTL:** 7 dias (verificado no frontend por comparação com `updated_at`)
+Lojas de pneus e frotistas ativos, carregados por `scripts/atualizar_receita.py` (veja a seção 8.3).
+Colunas principais: `cnpj`, `razao_social`, `nome_fantasia`, `data_abertura`, `ano`, `mes`, `cnae`,
+endereço (`logradouro`, `numero`, `complemento`, `bairro`, `cep`, `municipio`, `uf`), `telefone`,
+`referencia` (mês da base) e `atualizado_em`. Lida só pelo backend com a service key.
 
 ---
 
-### 4.2. Tabela `search_history` — Histórico Permanente
+### 4.2. Tabelas legadas `searches`, `search_history` e `search_limits`
 
-Registra cada pesquisa realizada. Diferente de `searches`, não tem restrição UNIQUE — acumula todos os registros.
-
-```sql
-id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_email   TEXT NOT NULL
-state        TEXT NOT NULL    -- UF
-city         TEXT             -- Cidade (nullable)
-mode         TEXT             -- 'vendedores' ou 'compradores'
-result_count INTEGER          -- Quantidade de empresas encontradas
-results      JSONB            -- Snapshot completo das empresas
-searched_at  TIMESTAMPTZ DEFAULT now()
-```
-
-**Uso:** Permite restaurar resultados passados sem consumir a API do Google.
+Eram o cache, o histórico e o limite diário da antiga busca no Google Places. **Não são mais usadas** pelo
+sistema; continuam no banco só com os dados antigos.
 
 ---
 
@@ -186,7 +162,7 @@ Registro de lojas para acompanhamento comercial.
 id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
 user_email   TEXT
 company_name TEXT NOT NULL
-company_id   TEXT UNIQUE      -- place_id do Google (garante sem duplicatas)
+company_id   TEXT UNIQUE      -- "cnpj:<número>" para lojas vindas da Receita
 phone        TEXT
 address      TEXT
 city         TEXT
@@ -209,7 +185,7 @@ created_at   TIMESTAMPTZ DEFAULT now()
 ```sql
 id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
 user_email   TEXT NOT NULL
-place_id     TEXT NOT NULL    -- place_id do Google
+place_id     TEXT NOT NULL    -- identificador da empresa (registros antigos: id do Google)
 company_data JSONB            -- Snapshot dos dados da empresa
 created_at   TIMESTAMPTZ DEFAULT now()
 
@@ -218,25 +194,7 @@ UNIQUE (user_email, place_id)
 
 ---
 
-### 4.5. Tabela `search_limits` — Rate Limiting Diário
-
-Controla o número de buscas por usuário por dia e por modo.
-
-```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_email  TEXT NOT NULL
-search_key  TEXT NOT NULL    -- 'vendedores' ou 'compradores'
-search_date DATE NOT NULL    -- Data da contagem
-count       INTEGER          -- Número de buscas realizadas naquele dia
-
-UNIQUE (user_email, search_key, search_date)
-```
-
-**Limite:** 10 buscas por dia por modo (vendedores e compradores contados separadamente).
-
----
-
-### 4.6. Row Level Security (RLS)
+### 4.5. Row Level Security (RLS)
 
 Política aplicada a todas as tabelas:
 
@@ -254,7 +212,7 @@ CREATE POLICY "Usuário escreve apenas seus dados"
 
 ---
 
-### 4.7. Trigger — Auto-confirmação de E-mail
+### 4.6. Trigger — Auto-confirmação de E-mail
 
 Evita o envio de e-mail de verificação ao criar novos usuários.
 
@@ -283,30 +241,7 @@ CREATE TRIGGER trg_auto_confirm_user
 
 O backend é uma API REST em Flask executada como **serverless function** no Vercel.
 
-### 5.1. Configurações Globais
-
-```python
-MAX_PAGES      = 2      # Máximo de páginas por query na Google Places API
-PAGE_DELAY     = 2      # Delay entre páginas (segundos)
-MAX_CITIES     = 3      # Máximo de cidades por estado em busca sem cidade
-MAX_RETRIES    = 2      # Tentativas de retry por requisição
-BACKOFF_BASE   = 1      # Backoff exponencial (1s, 2s)
-```
-
-### 5.2. Palavras Bloqueadas
-
-Empresas cujo nome contém qualquer um desses termos são automaticamente filtradas:
-
-```python
-_BLOCK_WORDS = frozenset({
-    'borracharia', 'borrachas', 'reforma de pneu', 'conserto de pneu',
-    'recapagem', 'recauchutagem', 'vulcanização', 'alinhamento',
-    'balanceamento', 'oficina', 'mecânica', 'auto center',
-    'funilaria', 'pintura automotiva'
-})
-```
-
-### 5.3. Endpoints
+### 5.1. Endpoints
 
 #### `POST /api/register`
 
@@ -339,71 +274,27 @@ Cria um novo usuário via Admin API do Supabase com auto-confirmação de e-mail
 
 ---
 
-#### `GET /api/buscar`
+#### `GET /api/cnpj`
 
-Busca empresas via Google Places Text Search API.
+Consulta um CNPJ (14 dígitos) em paralelo na BrasilAPI, ReceitaWS e CNPJá e devolve a primeira resposta
+válida, já normalizada (`razao_social`, `data_inicio_atividade`, `cnae_code`, `porte`, `is_mei`…).
 
-**Parâmetros de query string:**
+#### `GET /api/receita-lojas` e `GET /api/receita-info`
 
-| Parâmetro | Obrigatório | Descrição |
-|---|---|---|
-| `uf` | Sim | Sigla do estado (ex: `SP`) |
-| `query` | Sim | Termo de busca (ex: `loja de pneus`) |
-| `cidade` | Não | Nome da cidade (busca localizada) |
-| `max_cidades` | Não | Número máximo de cidades a buscar (padrão: 3) |
+Lista paginada da base da Receita e mês da base carregada — detalhes na seção 8.3.
 
-**Resposta:**
-```json
-{
-  "total_unique": 42,
-  "results": [
-    {
-      "place_id": "ChIJ...",
-      "name": "Nome da Empresa",
-      "formatted_address": "Rua X, Cidade - SP",
-      "rating": 4.5,
-      "types": ["store"],
-      "geometry": { "location": { "lat": -23.5, "lng": -46.6 } }
-    }
-  ],
-  "errors": []
-}
-```
+#### `/api/admin-users`, `/api/admin-decide`, `/api/admin-reset`
 
-**Algoritmo de busca:**
-1. Se `cidade` fornecida: busca diretamente naquela cidade
-2. Se `cidade` vazia: obtém lista de municípios do estado via BrasilAPI e itera pelas `max_cidades` primeiras, com fallback para a capital do estado
-3. Para cada city+query: faz requisição ao Google Places com paginação (até `MAX_PAGES`)
-4. Implementa retry com backoff exponencial (`MAX_RETRIES` tentativas)
-5. Deduplica por `place_id` mantendo o resultado com maior rating
-6. Filtra empresas cujo nome contenha palavras em `_BLOCK_WORDS`
+Aprovação de cadastros e reset de senha, só para a administradora (`_require_admin()`).
+
+Todas as rotas, exceto `/api/register` e `/api/reset-request`, exigem usuário logado e aprovado (`_require_user()`).
 
 ---
 
-#### `GET /api/details`
+### 5.2. Tratamento de Erros
 
-Retorna detalhes completos de uma empresa pelo place_id.
-
-Chamada paga ao Google: o frontend só a faz quando o usuário clica em **📞 Ver contato** no card
-(`verContato(idx)`); o resultado vai para o cache da busca e não é pedido de novo.
-
-**Parâmetros:**
-
-| Parâmetro | Obrigatório | Descrição |
-|---|---|---|
-| `place_id` | Sim | ID do Google Places |
-
-**Resposta:** Resposta direta da Google Places Details API com campos:
-- `name`, `formatted_address`, `formatted_phone_number`
-- `website`, `opening_hours`, `geometry`
-- `rating`, `user_ratings_total`
-
----
-
-### 5.4. Tratamento de Erros
-
-- Falha na Google Places API: retorna `{"error": "..."}` com status 500
-- Parâmetro ausente: retorna `{"error": "..."}` com status 400
+- Serviços de CNPJ fora do ar: 502 com mensagem amigável
+- Parâmetro inválido: retorna `{"ok": false, "error": "..."}` com status 400
 - Erro na criação de usuário: retorna `{"ok": false, "error": "..."}` com status 200
 - Base da Receita ainda não carregada (`lojas_receita` não existe): 503 com mensagem amigável
 
@@ -411,7 +302,7 @@ Chamada paga ao Google: o frontend só a faz quando o usuário clica em **📞 V
 
 ## 6. Frontend — Interface Web
 
-**Arquivo:** [index.html](index.html) (1677 linhas com JS inline) + [css/styles.css](css/styles.css)
+**Arquivo:** [index.html](index.html) (JS inline) + [css/styles.css](css/styles.css)
 
 ### 6.1. Estrutura HTML
 
@@ -442,12 +333,12 @@ Chamada paga ao Google: o frontend só a faz quando o usuário clica em **📞 V
 
     <!-- Conteúdo principal -->
     <main id="content">
-      <!-- Abas: Buscar / Favoritos / Histórico / Exportar / Lojas -->
+      <!-- Abas: Lojas Novas / Favoritos / Lojas / Exportar / Administração -->
     </main>
 
     <!-- Mobile: Bottom Nav -->
     <nav id="bottom-nav">
-      5 botões de navegação
+      Botões de navegação
     </nav>
 
   </div>
@@ -461,11 +352,11 @@ Chamada paga ao Google: o frontend só a faz quando o usuário clica em **📞 V
 
 | Aba | ID | Funcionalidade Principal |
 |---|---|---|
-| Buscar | `'b'` | Pesquisa de empresas com filtros e cards |
+| Lojas Novas | `'r'` | Empresas da Receita com filtros + consulta de CNPJ (aba inicial) |
 | Favoritos | `'f'` | Lista de empresas favoritadas com busca |
-| Histórico | `'h'` | Pesquisas passadas com restauração e filtros |
+| Lojas (CRM) | `'s'` | Lojas registradas com edição inline |
 | Exportar | `'e'` | Exportação em CSV, Excel e PDF |
-| Lojas (CRM) | `'s'` | Tabela de lojas registradas com edição inline |
+| Administração | `'a'` | Aprovação de cadastros e reset de senha (só a adm) |
 
 ### 6.3. Estado Global (JavaScript)
 
@@ -473,51 +364,15 @@ Todas as variáveis globais que controlam o estado da aplicação:
 
 ```javascript
 let user        = null         // { email, name } — usuário logado
-let cos         = []           // Array de empresas da busca atual
-let favs        = new Set()    // place_ids dos favoritos
-let favData     = new Map()    // Dados completos: place_id → company object
-let hist        = []           // Histórico de pesquisas da sessão
-let searchMode  = 'vendedores' // Modo ativo: 'vendedores' | 'compradores'
-let filterType  = 'todos'      // Filtro ativo: 'atacado' | 'loja' | 'frotista' | 'novo'
+let favs        = new Set()    // ids dos favoritos
+let favData     = new Map()    // Dados completos: id → empresa
+let rf          = {...}        // Filtros, página e linhas da aba Lojas Novas
 let theme       = 'dark'       // Tema: 'dark' | 'light' (persistido no localStorage)
-let dailyLimits = {}           // { vendedores: N, compradores: N } — uso diário
 let storeFilter = 'todos'      // Filtro CRM: status da loja
 let favSearch   = ''           // Texto de busca nos favoritos
-let currentPage = 0            // Página atual (paginação de resultados)
-const PAGE_SIZE = 30           // Resultados por página
 ```
 
-### 6.4. Estrutura de Dados de uma Empresa
-
-Cada empresa no array `cos` segue este formato:
-
-```javascript
-{
-  _idx:           number,        // Índice no array cos[]
-  id:             string,        // place_id do Google Places
-  nome:           string,        // Nome da empresa
-  endereco:       string,        // Endereço formatado completo
-  cidade:         string,        // Cidade
-  uf:             string,        // Estado (UF)
-  telefone:       string,        // Telefone formatado
-  website:        string,        // URL do site
-  avaliacao:      string,        // Rating (ex: "4.5 ★")
-  tipo:           string,        // 'Atacadista' | 'Loja de Pneus' | 'Frotista' | 'Empresa'
-  lat:            number | null, // Latitude
-  lon:            number | null, // Longitude
-  abertura:       string | null, // Data de abertura (YYYY-MM-DD)
-  gmaps_url:      string,        // Link direto para Google Maps
-  _detailsLoaded: boolean,       // Se telefone/site já foram carregados
-  _isNovo:        boolean,       // true se empresa < 24 meses
-  _leadStatus:    string,        // Status calculado do lead (veja seção 8.3)
-  cnpj:           string,        // CNPJ formatado
-  porte:          string,        // Porte da empresa (BrasilAPI)
-  cnae:           string,        // Descrição do CNAE principal
-  cnae_code:      string         // Código do CNAE principal
-}
-```
-
-### 6.5. Fluxo de Autenticação
+### 6.4. Fluxo de Autenticação
 
 **Cadastro:**
 1. Usuário preenche nome, e-mail e senha
@@ -533,10 +388,10 @@ Cada empresa no array `cos` segue este formato:
 4. `user` global é populado com `{ email, name }`
 
 **Entrada no App:**
-1. Carrega favoritos do Supabase (`favorites` table)
-2. Carrega contadores de limite diário (`search_limits` table)
-3. Tenta restaurar última busca do histórico automaticamente
-4. Renderiza a aba "Buscar"
+1. Confere se o cadastro foi aprovado (`user_access`)
+2. Carrega favoritos (`favorites`) e lojas registradas (`stores`)
+3. Verifica se a base da Receita foi atualizada (aviso no topo)
+4. Renderiza a aba "Lojas Novas"
 
 **Logout:**
 1. Chama `supabase.auth.signOut()`
@@ -545,83 +400,16 @@ Cada empresa no array `cos` segue este formato:
 
 ---
 
-### 6.6. Fluxo de Busca de Empresas
+### 6.5. Validação de CNPJ
 
-```
-Usuário seleciona UF + (cidade opcional) + modo
-           │
-           ▼
-    Verifica rate limit
-    (< 10 buscas hoje?)
-           │
-     Sim ──┴── Não → Exibe erro
-           │
-           ▼
-    Gera search_key:
-    "{UF}_{cidade}_{modo}"
-           │
-           ▼
-    Verifica cache no Supabase
-    (updated_at < 7 dias?)
-           │
-     Hit ──┴── Miss
-      │         │
-      │         ▼
-      │   Chama GET /api/buscar
-      │   (múltiplas queries)
-      │         │
-      │         ▼
-      │   Salva no cache
-      │   (upsert em searches)
-      │         │
-      └────┬────┘
-           │
-           ▼
-    Salva no histórico
-    (insert em search_history)
-           │
-           ▼
-    Incrementa rate limit
-    (upsert em search_limits)
-           │
-           ▼
-    Renderiza cards com
-    paginação (30/página)
-```
+Painel "Consultar CNPJ" na aba Lojas Novas. A consulta vai para `GET /api/cnpj` (BrasilAPI, ReceitaWS e
+CNPJá em paralelo); se o servidor falhar, o navegador tenta a BrasilAPI direto.
 
-### 6.7. Termos de Busca por Modo
+**Dados extraídos:** razão social, data de abertura, porte (ME/EPP/Médio/Grande), CNAE principal, MEI.
 
-**Modo Vendedores** (distribuidoras, atacadistas, lojas):
-- `distribuidora de pneus`
-- `atacadista de pneus`
-- `loja de pneus`
-- `revenda de pneus`
-- `pneus truck center`
+### 6.6. Paginação
 
-**Modo Compradores** (transportadoras e frotistas):
-- `transportadora cargas`
-- `empresa transporte rodoviario`
-- `logistica transporte cargas`
-
-### 6.8. Validação de CNPJ
-
-O sistema tenta 9 combinações (3 APIs × 3 proxies CORS) com timeout de 6 segundos cada:
-
-**APIs:**
-1. BrasilAPI: `https://brasilapi.com.br/api/cnpj/v1/{cnpj}`
-2. ReceitaWS: `https://receitaws.com.br/v1/cnpj/{cnpj}`
-3. CNPJ.ws: `https://publica.cnpj.ws/cnpj/{cnpj}`
-
-**Proxies CORS** (usados quando o browser bloqueia a chamada direta):
-1. `corsproxy.io/?url={url}`
-2. `api.allorigins.win/raw?url={url}`
-3. `api.codetabs.com/v1/proxy?quest={url}`
-
-**Dados extraídos:** razão social, data de abertura, porte (ME/EPP/Médio/Grande), CNAE principal.
-
-### 6.9. Paginação
-
-- 30 empresas por página (`PAGE_SIZE = 30`)
+- 30 empresas por página na aba Lojas Novas
 - Controles: Anterior / Páginas numéricas / Próxima
 - Ellipsis (`...`) para ocultar páginas intermediárias quando há muitas
 
@@ -686,24 +474,9 @@ Isso garante que um usuário nunca consegue ler ou escrever dados de outro usuá
 
 ## 8. Regras de Negócio
 
-### 8.1. Rate Limiting
+### 8.1. Classificação de Leads
 
-- **Limite:** 10 buscas por dia, por usuário, por modo
-- **Contagem:** Separada para vendedores e compradores
-- **Chave:** `user_email + modo + data`
-- **Verificação:** Antes de cada busca (bloqueia se `count >= 10`)
-- **Incremento:** Após busca concluída com sucesso (upsert com `count + 1`)
-
-### 8.2. Cache de Pesquisas
-
-- **TTL:** 7 dias a partir de `updated_at`
-- **Chave:** `user_email + search_key`
-- **Comportamento:** Se o cache existir e for válido, retorna os dados armazenados sem chamar a API do Google
-- **Invalidação:** O cache é sobrescrito (upsert) quando o usuário força uma nova busca
-
-### 8.3. Classificação de Leads
-
-A função `validateLead(d)` classifica cada empresa com base em dados de CNPJ:
+A função `validateLead(d)` classifica a empresa consultada no painel de CNPJ:
 
 | Status | Label | Critério | Badge |
 |---|---|---|---|
@@ -723,16 +496,12 @@ CNAE_COMPRADOR = ['4930202']              // Transporte rodoviário de cargas
 CNAE_BLOQUEADO = ['4520006']              // Serviços de borracharia
 ```
 
-### 8.4. Identificação de Leads Novos
+### 8.2. Identificação de Leads Novos
 
 Uma empresa é marcada como **Lead Novo** quando o CNAE é de comércio de pneus e ela foi
 aberta nos **últimos 3 anos** (ano atual e os dois anteriores — `ANO_NOVAS` no frontend).
 
-### 8.4.1. Lojas e frotistas novos da Receita Federal
-
-> **Busca no Google desativada** (`BUSCA_GOOGLE = false` no `index.html` e `BUSCA_GOOGLE = False` no
-> `api/index.py`): as abas Buscar e Histórico ficam ocultas, o sistema abre direto em Lojas Novas e as rotas
-> `/api/buscar` e `/api/details` respondem 503. Para religar, voltar as duas flags para verdadeiro.
+### 8.3. Lojas e frotistas da Receita Federal
 
 A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) e os frotistas
 (CNAE 4930-2/02, transporte rodoviário de carga — o mesmo `CNAE_COMPRADOR` da validação de lead)
@@ -746,15 +515,9 @@ Receita (publicados 1x por mês).
   Baixa ~6,5 GB, filtra e **substitui** a lista (upsert por CNPJ + remove o que não está na base nova).
   Se a lista nova vier com menos da metade das lojas atuais, nada é alterado (proteção contra base corrompida).
   Teste local sem gravar: `python scripts/atualizar_receita.py --teste saida.csv`.
-- **Cruzamento com o Google** (`POST /api/receita-match`): cada card é comparado com as lojas do mesmo
-  **CEP**; bate se o **número** do endereço é igual ou o **nome** é parecido. Empate entre dois candidatos
-  não marca nada. O card ganha borda verde, etiqueta "🆕 Loja nova — aberta em mm/aaaa" (ou "🆕 Frotista novo"),
-  CNPJ e abertura. Vale para as buscas de lojas e de frotistas.
-- **Filtro Leads Novos (aba Buscar):** cards do Google ainda não registrados, com os da Receita primeiro.
 - **Aba Lojas Novas** (`ctab = 'r'`, `GET /api/receita-lojas?tipo=lojas|frotistas`): empresas da Receita
-  com filtros de tipo (Lojas de pneus / Frotistas — começa pelo modo da última busca), estado
-  (ou Brasil todo), cidade, ano e mês, sem precisar de busca. Lojas que já estão nos cards do Google
-  ou no CRM (`company_id = cnpj:<número>`) não se repetem.
+  com filtros de tipo (Lojas de pneus / Frotistas), estado (ou Brasil todo), cidade, ano e mês.
+  Lojas já registradas no CRM (`company_id = cnpj:<número>`) não se repetem.
 - **Aba Exportar:** o card "Lojas Novas (Receita Federal)" exporta em CSV, Excel ou PDF com os **mesmos filtros**
   da aba Lojas Novas (`rfParams()`), buscando todas as páginas em blocos de 1000 (`exportar=1` na API).
   PDF limitado a 3000 registros.
@@ -762,80 +525,34 @@ Receita (publicados 1x por mês).
   (`referencia`) e compara com o último mês visto, guardado no `localStorage` por usuário (`al_rf_ref:<email>`).
   Se mudou, aparece um aviso no topo ("A base da Receita foi atualizada…") com o botão *Ver Lojas Novas*;
   ele some quando é fechado. No primeiro acesso só registra o mês, sem aviso.
-- **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.
-
-### 8.5. Deduplicação de Resultados
-
-O backend deduplica os resultados da Google Places API por `place_id`. Em caso de duplicata (mesma empresa retornada por queries diferentes), mantém o resultado com maior `rating`.
-
-### 8.6. Bloqueio Automático de Empresas
-
-O backend filtra automaticamente empresas cujo nome (em lowercase) contenha qualquer das palavras em `_BLOCK_WORDS`. Esse filtro acontece antes do retorno da API — o frontend nunca recebe essas empresas.
-
-### 8.7. Histórico x Cache
-
-| Característica | `searches` (Cache) | `search_history` (Histórico) |
-|---|---|---|
-| Unicidade | Sim (por search_key) | Não (acumula tudo) |
-| Sobrescrito | Sim (upsert) | Não (sempre insert) |
-| TTL | 7 dias | Permanente |
-| Finalidade | Evitar chamadas à API | Registrar histórico do usuário |
-| Restauração | Automática (por chave) | Manual (clique em "Ver Resultados") |
+- **Custo:** nenhuma API paga; só consultas ao nosso Supabase.
 
 ---
 
 ## 9. Integrações Externas
 
-### 9.1. Google Places API
+### 9.1. Dados abertos do CNPJ (Receita Federal)
 
-**Endpoints utilizados:**
+Baixados pelo `scripts/atualizar_receita.py` (GitHub Actions) para montar a tabela `lojas_receita`.
 
-| Endpoint | Uso |
+### 9.2. APIs de CNPJ
+
+Chamadas pelo backend (`/api/cnpj`), em paralelo:
+
+| API | Endpoint |
 |---|---|
-| `/maps/api/place/textsearch/json` | Busca de empresas por texto e localização |
-| `/maps/api/place/details/json` | Detalhes de uma empresa (telefone, site, horários) |
+| BrasilAPI | `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` |
+| ReceitaWS | `https://receitaws.com.br/v1/cnpj/{cnpj}` |
+| CNPJá | `https://open.cnpja.com/office/{cnpj}` |
 
-**Parâmetros da busca:**
-- `query`: Termo de busca + estado/cidade
-- `language`: `pt-BR`
-- `region`: `BR`
-- `pagetoken`: Para paginar resultados (até 2 páginas)
-
-**Campos dos detalhes:**
-- `name`, `formatted_address`, `formatted_phone_number`
-- `website`, `geometry`, `rating`, `user_ratings_total`
-
-### 9.2. BrasilAPI — Municípios
-
-Usada pelo backend para obter a lista de municípios de um estado quando o usuário não especifica uma cidade.
-
-**Endpoint:** `https://brasilapi.com.br/api/ibge/municipios/v1/{uf}`
-
-### 9.3. APIs de CNPJ (Frontend)
-
-Chamadas diretamente pelo navegador via JS:
-
-| API | Endpoint | Prioridade |
-|---|---|---|
-| BrasilAPI | `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` | 1ª |
-| ReceitaWS | `https://receitaws.com.br/v1/cnpj/{cnpj}` | 2ª |
-| CNPJ.ws | `https://publica.cnpj.ws/cnpj/{cnpj}` | 3ª |
-
-Em caso de erro CORS, cada API é tentada via 3 proxies públicos:
-1. `https://corsproxy.io/?url={url}`
-2. `https://api.allorigins.win/raw?url={url}`
-3. `https://api.codetabs.com/v1/proxy?quest={url}`
-
-**Total de tentativas:** 9 (3 APIs × 3 proxies)
-
-### 9.4. WhatsApp
+### 9.3. WhatsApp
 
 Link direto para conversa via `https://wa.me/{telefone}` (sem API, apenas URL).
 
-### 9.5. Mapas
+### 9.4. Mapas
 
-- **Google Maps:** Link direto para a empresa via `https://maps.google.com/?q=...`
-- **OpenStreetMap:** Usado para visualização de coordenadas (lat/lon)
+Botão "🗺 Maps" nos cards: link público de pesquisa do Google Maps (`https://www.google.com/maps/search/?api=1&query=...`).
+Só abre o site em outra aba — não usa chave nem API paga.
 
 ---
 
@@ -885,7 +602,7 @@ O projeto está configurado para deploy no **Vercel**.
 }
 ```
 
-- Arquivos estáticos (`index.html`, `css/`, `js/`) são servidos diretamente
+- Arquivos estáticos (`index.html`, `css/`) são servidos diretamente
 - Rotas `/api/*` são redirecionadas para a serverless function `api/index.py`
 - HTML é servido sempre sem cache para garantir atualização imediata
 
@@ -903,8 +620,7 @@ Configure em Dashboard → Projeto → Settings → Environment Variables:
 ### 11.2. Limitações do Vercel (Plano Gratuito)
 
 - **Timeout por requisição:** 10 segundos
-- **Impacto:** Buscas por estado inteiro (sem cidade) podem ultrapassar o timeout
-- **Recomendação:** Especificar sempre uma cidade para buscas mais rápidas
+- **Impacto:** a exportação da base da Receita é feita em blocos de 1000 linhas para caber nesse limite
 
 ---
 

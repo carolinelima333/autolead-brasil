@@ -26,7 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Raiz do projeto — index.html, css/ e js/ ficam aqui (local e Vercel)
+# Raiz do projeto — index.html e css/ ficam aqui (local e Vercel)
 _BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = _BASE_DIR
 
@@ -46,186 +46,9 @@ def _security_headers(resp):
     return resp
 
 # .strip(): valores colados no painel da Vercel podem vir com quebra de linha no fim
-GOOGLE_API_KEY      = os.getenv('GOOGLE_API_KEY', '').strip()
 SUPABASE_URL        = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.co').strip().rstrip('/')
 SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '').strip()
 ADMIN_EMAIL         = os.getenv('ADMIN_EMAIL', 'carolinelima313@gmail.com').strip().lower()
-
-_MAX_PAGES    = 2
-_TOKEN_DELAY  = 2.0
-_MAX_CITIES   = 3
-_RETRY        = 2
-_BACKOFF_BASE = 1
-
-_BLOCK_WORDS = frozenset({
-    'borracharia', 'borrachas', 'borracheiro',
-    'reforma de pneu', 'conserto de pneu', 'recapagem', 'recauchutagem',
-    'vulcanização', 'vulcanizacao', 'alinhamento', 'balanceamento',
-    'oficina', 'mecânica', 'mecanica', 'auto center', 'autocenter',
-    'funilaria', 'funileiro', 'pintura automotiva',
-})
-
-_CAPITAIS: dict[str, str] = {
-    'AC': 'Rio Branco',     'AL': 'Maceió',           'AM': 'Manaus',
-    'AP': 'Macapá',         'BA': 'Salvador',          'CE': 'Fortaleza',
-    'DF': 'Brasília',       'ES': 'Vitória',           'GO': 'Goiânia',
-    'MA': 'São Luís',       'MG': 'Belo Horizonte',    'MS': 'Campo Grande',
-    'MT': 'Cuiabá',         'PA': 'Belém',             'PB': 'João Pessoa',
-    'PE': 'Recife',         'PI': 'Teresina',          'PR': 'Curitiba',
-    'RJ': 'Rio de Janeiro', 'RN': 'Natal',             'RO': 'Porto Velho',
-    'RR': 'Boa Vista',      'RS': 'Porto Alegre',      'SC': 'Florianópolis',
-    'SE': 'Aracaju',        'SP': 'São Paulo',         'TO': 'Palmas',
-}
-
-
-def _is_blocked_name(name: str) -> bool:
-    n = name.lower()
-    return any(w in n for w in _BLOCK_WORDS)
-
-
-def _places_request(query: str, api_key: str, page_token: Optional[str] = None) -> dict:
-    params: dict = {
-        'query':    query,
-        'key':      api_key,
-        'language': 'pt-BR',
-        'region':   'BR',
-    }
-    if page_token:
-        params['pagetoken'] = page_token
-
-    for attempt in range(_RETRY):
-        try:
-            resp = requests.get(
-                'https://maps.googleapis.com/maps/api/place/textsearch/json',
-                params=params,
-                timeout=12,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as exc:
-            wait = _BACKOFF_BASE ** attempt
-            logger.warning('[places] tentativa %d/%d falhou — %s — retry em %ds',
-                           attempt + 1, _RETRY, exc, wait)
-            if attempt < _RETRY - 1:
-                time.sleep(wait)
-
-    return {'status': 'NETWORK_ERROR', 'results': []}
-
-
-def _paginate(query: str, api_key: str) -> tuple[list[dict], list[str]]:
-    results:    list[dict] = []
-    errors:     list[str]  = []
-    page_token: Optional[str] = None
-
-    for page in range(_MAX_PAGES):
-        if page > 0:
-            time.sleep(_TOKEN_DELAY)
-
-        data   = _places_request(query, api_key, page_token)
-        status = data.get('status', 'UNKNOWN')
-
-        if status == 'OK':
-            batch = data.get('results', [])
-            results.extend(batch)
-            logger.info('[paginate] p%d — %d resultado(s) — "%s"', page + 1, len(batch), query[:70])
-            page_token = data.get('next_page_token')
-            if not page_token:
-                break
-        elif status == 'ZERO_RESULTS':
-            break
-        elif status in ('REQUEST_DENIED', 'INVALID_REQUEST'):
-            msg = f'{status}: {data.get("error_message", "")}'
-            errors.append(msg)
-            logger.error('[paginate] %s', msg)
-            break
-        elif status == 'OVER_QUERY_LIMIT':
-            errors.append('OVER_QUERY_LIMIT')
-            logger.warning('[paginate] rate limit atingido')
-            break
-        else:
-            errors.append(f'status={status}')
-            logger.warning('[paginate] status inesperado: %s', status)
-            break
-
-    return results, errors
-
-
-def _get_cidades(uf: str) -> list[str]:
-    uf = uf.upper()
-    if uf == 'DF':
-        return ['Brasília']
-    try:
-        resp = requests.get(
-            f'https://brasilapi.com.br/api/ibge/municipios/v1/{uf}',
-            timeout=10,
-        )
-        resp.raise_for_status()
-        cidades = [m['nome'].title() for m in resp.json()]
-        logger.info('[ibge] %d municípios para %s', len(cidades), uf)
-        return cidades
-    except Exception as exc:
-        logger.error('[ibge] erro ao buscar municípios de %s: %s', uf, exc)
-        return []
-
-
-def _format(raw: dict) -> dict:
-    return {
-        'place_id':          raw.get('place_id', ''),
-        'name':              raw.get('name', ''),
-        'formatted_address': raw.get('formatted_address', ''),
-        'rating':            raw.get('rating'),
-        'opening_hours':     raw.get('opening_hours', {}),
-        'phone':             '',
-        'website':           '',
-        'place_types':       raw.get('types', []),
-    }
-
-
-def buscar_empresas(estado_uf: str, cidade: str, query: str,
-                    api_key: str, max_cidades: int = _MAX_CITIES) -> dict:
-    seen:   dict[str, dict] = {}
-    errors: list[str]       = []
-
-    if cidade:
-        locais = [f'{cidade}, {estado_uf}, Brasil']
-        logger.info('[buscar] modo cidade — %s/%s — query="%s"', cidade, estado_uf, query)
-    else:
-        cidades = _get_cidades(estado_uf)
-        if cidades:
-            capital = _CAPITAIS.get(estado_uf)
-            if capital and capital in cidades:
-                cidades = [capital] + [c for c in cidades if c != capital]
-            sel    = cidades[:max_cidades]
-            locais = [f'{c}, {estado_uf}, Brasil' for c in sel]
-            logger.info('[buscar] modo estado — %d cidade(s) de %s — query="%s"',
-                        len(sel), estado_uf, query)
-        else:
-            capital = _CAPITAIS.get(estado_uf, estado_uf)
-            locais  = [f'{capital}, {estado_uf}, Brasil']
-            logger.warning('[buscar] fallback capital — %s/%s', capital, estado_uf)
-
-    for local in locais:
-        raw, errs = _paginate(f'{query} em {local}', api_key)
-        errors.extend(errs)
-        for r in raw:
-            pid = r.get('place_id', '')
-            if not pid:
-                continue
-            if pid not in seen:
-                seen[pid] = r
-            else:
-                cur = seen[pid].get('rating') or 0
-                new = r.get('rating') or 0
-                if new > cur:
-                    seen[pid] = r
-
-    results = [_format(r) for r in seen.values() if not _is_blocked_name(r.get('name', ''))]
-    logger.info('[buscar] concluído — %d único(s), %d erro(s)', len(results), len(errors))
-    return {
-        'total_unique': len(results),
-        'results':      results,
-        'errors':       list(dict.fromkeys(errors)),
-    }
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────
@@ -289,7 +112,7 @@ _AUTH_TTL = 300  # segundos — evita validar o token a cada chamada de detalhes
 
 
 def _require_user():
-    """Exige usuário logado e aprovado (protege a cota paga do Google).
+    """Exige usuário logado e aprovado.
     Retorna None se autorizado, ou a resposta de erro pronta."""
     auth = request.headers.get('Authorization', '')
     token = auth[7:] if auth.lower().startswith('bearer ') else ''
@@ -327,17 +150,6 @@ def _require_user():
     if not approved:
         return jsonify({'ok': False, 'error': 'Acesso não aprovado pela administradora'}), 403
     return None
-
-
-# Busca no Google (Text Search + Place Details, ambas pagas) desligada a pedido da usuária: a prospecção
-# passa a ser pela base da Receita. Para religar: True aqui e BUSCA_GOOGLE no index.html.
-BUSCA_GOOGLE = False
-
-
-def _busca_google_off():
-    if BUSCA_GOOGLE:
-        return None
-    return jsonify({'ok': False, 'error': 'A busca no Google está desativada.'}), 503
 
 
 def _require_admin():
@@ -599,7 +411,7 @@ def api_cnpj():
 
 # ─── LOJAS NOVAS (base da Receita) ────────────────────────────
 # Tabela lojas_receita, preenchida 2x por mês por scripts/atualizar_receita.py.
-# Só consulta o nosso banco — nenhuma chamada ao Google.
+# Só consulta o nosso banco.
 
 _RF_COLS = ('cnpj,razao_social,nome_fantasia,data_abertura,cnae,logradouro,numero,'
             'complemento,bairro,cep,municipio,uf,telefone,referencia')
@@ -608,33 +420,12 @@ _RF_PAGE_EXPORT = 1000  # exportação (aba Exportar): blocos maiores; 1000 é o
 # Tipos da tabela: lojas de pneus (atacado/varejo) e frotistas (transporte rodoviário de carga)
 _RF_TIPOS = {'lojas': 'in.(4530702,4530705)', 'frotistas': 'eq.4930202'}
 _RF_MAX_ITENS = 300
-_CEP_RE = re.compile(r'\b(\d{5})-?(\d{3})\b')
-_NUM_RE = re.compile(r'^[^,]*,\s*(\d{1,6})\b')
-# Palavras que não identificam a loja (todas são de pneus) — ficam fora da comparação de nomes
-_RF_STOP = frozenset({
-    'LTDA', 'ME', 'EPP', 'EIRELI', 'SA', 'S/A', 'SLU', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM',
-    'COMERCIO', 'COM', 'PNEUS', 'PNEU', 'PNEUMATICOS', 'LOJA', 'DISTRIBUIDORA', 'ATACADO', 'VAREJO',
-    'AUTO', 'CENTER', 'TRUCK', 'CAR', 'CENTRO', 'SERVICOS', 'ACESSORIOS', 'PECAS', 'RODAS',
-})
+_UFS = frozenset('AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split())
 
 
 def _norm(s: str) -> str:
     s = unicodedata.normalize('NFKD', s or '')
     return ' '.join(''.join(ch for ch in s if not unicodedata.combining(ch)).upper().split())
-
-
-def _tokens(s: str) -> set[str]:
-    return {t for t in re.split(r'[^A-Z0-9]+', _norm(s)) if len(t) >= 3 and t not in _RF_STOP}
-
-
-def _sim_nome(nome_google: str, row: dict) -> float:
-    a = _tokens(nome_google)
-    melhor = 0.0
-    for nome_rf in (row.get('nome_fantasia'), row.get('razao_social')):
-        b = _tokens(nome_rf or '')
-        if a and b:
-            melhor = max(melhor, len(a & b) / min(len(a), len(b)))
-    return melhor
 
 
 def _rf_erro(resp):
@@ -652,7 +443,7 @@ def api_receita_lojas():
     if err:
         return err
     uf = request.args.get('uf', '').strip().upper()
-    if uf and uf not in _CAPITAIS:
+    if uf and uf not in _UFS:
         return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
     tipo = request.args.get('tipo', 'lojas')
     if tipo not in _RF_TIPOS:
@@ -666,7 +457,7 @@ def api_receita_lojas():
         return jsonify({'ok': False, 'error': 'Filtro inválido'}), 400
     if (ano and not 2000 <= ano <= 2100) or not 0 <= mes <= 12:
         return jsonify({'ok': False, 'error': 'Ano ou mês inválido'}), 400
-    # CNPJs que já aparecem em cards do Google ou no CRM — não repetir aqui
+    # CNPJs já registrados no CRM — não repetir aqui
     excluir = [c for c in request.args.get('excluir', '').split(',') if len(c) == 14 and c.isdigit()][:_RF_MAX_ITENS]
 
     tam = _RF_PAGE_EXPORT if request.args.get('exportar') == '1' else _RF_PAGE
@@ -717,138 +508,12 @@ def api_receita_info():
                     'atualizado_em': rows[0]['atualizado_em'] if rows else None})
 
 
-@app.route('/api/receita-match', methods=['POST'])
-def api_receita_match():
-    """Cruza os cards do Google com a base da Receita: mesmo CEP e (mesmo número ou nome parecido).
-    Na dúvida (dois candidatos empatados) não marca nada."""
-    err = _require_user()
-    if err:
-        return err
-    data = request.get_json(silent=True) or {}
-    uf = str(data.get('uf') or '').strip().upper()
-    itens = data.get('itens') if isinstance(data.get('itens'), list) else []
-    itens = [i for i in itens[:_RF_MAX_ITENS] if isinstance(i, dict)]
-
-    por_cep: dict[str, list[dict]] = {}
-    for it in itens:
-        m = _CEP_RE.search(str(it.get('endereco') or '')[:300])
-        if m:
-            por_cep.setdefault(m.group(1) + m.group(2), []).append(it)
-    if not por_cep:
-        return jsonify({'ok': True, 'matches': {}})
-
-    ceps = list(por_cep)
-    candidatos: dict[str, list[dict]] = {}
-    try:
-        for i in range(0, len(ceps), 100):
-            params = {'select': 'cnpj,razao_social,nome_fantasia,data_abertura,cnae,numero,cep,telefone',
-                      'cep': f'in.({",".join(ceps[i:i + 100])})'}
-            if uf in _CAPITAIS:
-                params['uf'] = f'eq.{uf}'
-            resp = requests.get(f'{SUPABASE_URL}/rest/v1/lojas_receita', params=params,
-                                headers=_sb_headers(), timeout=10)
-            if not resp.ok:
-                return _rf_erro(resp)
-            for row in resp.json():
-                candidatos.setdefault(row['cep'], []).append(row)
-    except requests.RequestException as exc:
-        logger.error('[receita] cruzamento: %s', exc)
-        return jsonify({'ok': False, 'error': 'Erro ao consultar a base da Receita. Tente novamente.'}), 502
-
-    escolhas: dict[str, tuple[float, str, dict]] = {}  # cnpj -> (pontos, place_id, linha)
-    for cep, lista in por_cep.items():
-        for it in lista:
-            pid = str(it.get('id') or '')[:200]
-            endereco = str(it.get('endereco') or '')[:300]
-            m = _NUM_RE.search(endereco)
-            num_g = m.group(1).lstrip('0') if m else ''
-            pontos = []
-            for row in candidatos.get(cep, []):
-                num_rf = re.sub(r'\D', '', row.get('numero') or '').lstrip('0')
-                mesmo_num = bool(num_g) and num_g == num_rf
-                sim = _sim_nome(str(it.get('nome') or '')[:200], row)
-                if mesmo_num or sim >= 0.5:
-                    pontos.append((int(mesmo_num) + sim, row))
-            if not pid or not pontos:
-                continue
-            pontos.sort(key=lambda p: p[0], reverse=True)
-            if len(pontos) > 1 and pontos[0][0] == pontos[1][0]:
-                continue  # empate: não dá para saber qual é
-            nota, row = pontos[0]
-            atual = escolhas.get(row['cnpj'])
-            if not atual or nota > atual[0]:
-                escolhas[row['cnpj']] = (nota, pid, row)
-
-    matches = {}
-    for nota, pid, row in escolhas.values():
-        if pid not in matches or nota > matches[pid][0]:
-            matches[pid] = (nota, row)
-    return jsonify({'ok': True, 'matches': {
-        pid: {k: row.get(k) for k in ('cnpj', 'razao_social', 'nome_fantasia', 'data_abertura', 'cnae', 'telefone')}
-        for pid, (nota, row) in matches.items()
-    }})
-
-
-@app.route('/api/buscar')
-def api_buscar():
-    err = _require_user() or _busca_google_off()
-    if err:
-        return err
-    uf          = request.args.get('uf',          '').strip().upper()
-    query       = request.args.get('query',       '').strip()
-    cidade      = request.args.get('cidade',      '').strip()
-    try:  # limite fixo no servidor: cada cidade a mais é chamada paga ao Google
-        max_cidades = max(1, min(int(request.args.get('max_cidades', _MAX_CITIES)), _MAX_CITIES))
-    except ValueError:
-        max_cidades = _MAX_CITIES
-
-    if not uf:
-        return jsonify({'error': 'Parâmetro uf obrigatório'}), 400
-    if not query:
-        return jsonify({'error': 'Parâmetro query obrigatório'}), 400
-    if not GOOGLE_API_KEY:
-        return jsonify({'error': 'GOOGLE_API_KEY não configurada no servidor'}), 500
-
-    return jsonify(buscar_empresas(uf, cidade, query, GOOGLE_API_KEY, max_cidades=max_cidades))
-
-
-@app.route('/api/details')
-def api_details():
-    err = _require_user() or _busca_google_off()
-    if err:
-        return err
-    place_id = request.args.get('place_id', '').strip()
-    if not place_id:
-        return jsonify({'error': 'place_id obrigatório'}), 400
-    if not GOOGLE_API_KEY:
-        return jsonify({'error': 'GOOGLE_API_KEY não configurada'}), 500
-    try:
-        resp = requests.get(
-            'https://maps.googleapis.com/maps/api/place/details/json',
-            params={
-                'place_id': place_id,
-                'fields':   'place_id,name,formatted_address,formatted_phone_number,rating,geometry,types,website,url',
-                'key':      GOOGLE_API_KEY,
-                'language': 'pt-BR',
-            },
-            timeout=12,
-        )
-        return jsonify(resp.json())
-    except Exception as exc:
-        logger.error('[details] %s', exc)
-        return jsonify({'error': 'Erro ao consultar detalhes'}), 500
-
-
 @app.route('/api/index.py', methods=['GET', 'POST'])
 def api_dispatch():
     """No Vercel o rewrite de vercel.json entrega o caminho original apenas
-    via query string (?path=buscar), não como PATH_INFO real — sem isso o
+    via query string (?path=cnpj), não como PATH_INFO real — sem isso o
     Flask cai na rota estática abaixo e serve o .py bruto em vez de executar."""
     action = request.args.get('path', '')
-    if action == 'buscar':
-        return api_buscar()
-    if action == 'details':
-        return api_details()
     if action == 'register':
         return api_register()
     if action == 'cnpj':
@@ -857,8 +522,6 @@ def api_dispatch():
         return api_receita_lojas()
     if action == 'receita-info':
         return api_receita_info()
-    if action == 'receita-match':
-        return api_receita_match()
     if action == 'reset-request':
         return api_reset_request()
     if action == 'admin-users':
@@ -872,7 +535,7 @@ def api_dispatch():
 
 # Rotas estáticas — usadas apenas no servidor local (no Vercel o frontend é servido diretamente).
 # Whitelist: só o que o navegador precisa. Nunca servir .env, .py, .sql etc.
-_STATIC_DIRS = ('css/', 'js/')
+_STATIC_DIRS = ('css/',)
 _STATIC_EXT  = ('.css', '.js', '.png', '.jpg', '.svg', '.ico', '.webp', '.woff', '.woff2')
 
 
