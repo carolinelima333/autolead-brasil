@@ -604,6 +604,7 @@ def api_cnpj():
 _RF_COLS = ('cnpj,razao_social,nome_fantasia,data_abertura,cnae,logradouro,numero,'
             'complemento,bairro,cep,municipio,uf,telefone,referencia')
 _RF_PAGE = 30
+_RF_PAGE_EXPORT = 1000  # exportação (aba Exportar): blocos maiores; 1000 é o máximo por consulta do Supabase
 # Tipos da tabela: lojas de pneus (atacado/varejo) e frotistas (transporte rodoviário de carga)
 _RF_TIPOS = {'lojas': 'in.(4530702,4530705)', 'frotistas': 'eq.4930202'}
 _RF_MAX_ITENS = 300
@@ -645,7 +646,8 @@ def _rf_erro(resp):
 
 @app.route('/api/receita-lojas')
 def api_receita_lojas():
-    """Lista paginada das empresas novas da Receita (lojas ou frotistas), com filtros de local e de ano/mês."""
+    """Lista paginada das empresas novas da Receita (lojas ou frotistas), com filtros de local e de ano/mês.
+    Com exportar=1 as páginas têm 1000 linhas (a aba Exportar busca todas, uma a uma)."""
     err = _require_user()
     if err:
         return err
@@ -667,8 +669,9 @@ def api_receita_lojas():
     # CNPJs que já aparecem em cards do Google ou no CRM — não repetir aqui
     excluir = [c for c in request.args.get('excluir', '').split(',') if len(c) == 14 and c.isdigit()][:_RF_MAX_ITENS]
 
+    tam = _RF_PAGE_EXPORT if request.args.get('exportar') == '1' else _RF_PAGE
     params = {'select': _RF_COLS, 'order': 'data_abertura.desc,cnpj',
-              'limit': _RF_PAGE, 'offset': page * _RF_PAGE, 'cnae': _RF_TIPOS[tipo]}
+              'limit': tam, 'offset': page * tam, 'cnae': _RF_TIPOS[tipo]}
     if uf:
         params['uf'] = f'eq.{uf}'
     if cidade:
@@ -690,7 +693,7 @@ def api_receita_lojas():
     rows = resp.json()
     total = resp.headers.get('Content-Range', '*/0').split('/')[-1]
     return jsonify({'ok': True, 'rows': rows, 'total': int(total) if total.isdigit() else len(rows),
-                    'page_size': _RF_PAGE})
+                    'page_size': tam})
 
 
 @app.route('/api/receita-match', methods=['POST'])

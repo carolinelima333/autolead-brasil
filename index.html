@@ -1326,20 +1326,29 @@ function rfPage(n) {
   loadRf().then(() => { const el = g('rf-sec'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 }
 
-async function loadRf() {
-  rf.carregando = true; rf.erro = '';
-  renderRfRes();
+// Filtros da aba Lojas Novas — usados na lista da tela e na exportação (aba Exportar)
+function rfParams(page) {
   // Não repete lojas que já estão nos cards do Google ou registradas no CRM
   const excluir = new Set(BUSCA_GOOGLE ? cos.map(c => c.cnpj).filter(Boolean) : []);
   (window._storesList || []).forEach(s => { if ((s.company_id || '').startsWith('cnpj:')) excluir.add(s.company_id.slice(5)); });
-  const params = new URLSearchParams({ tipo: rf.tipo, page: rf.page });
+  const params = new URLSearchParams({ tipo: rf.tipo || 'lojas', page });
   if (rf.uf) params.set('uf', rf.uf);
   if (rf.cidade) params.set('cidade', rf.cidade);
   if (rf.ano) params.set('ano', rf.ano);
   if (rf.mes) params.set('mes', rf.mes);
   if (excluir.size) params.set('excluir', [...excluir].slice(0, 300).join(','));
+  return params;
+}
+function rfResumoFiltro() {
+  return [rf.tipo === 'frotistas' ? '🚛 Frotistas / Compradores' : '🏪 Lojas de pneus', rf.uf || 'Brasil todo',
+          rf.cidade, rf.ano, rf.mes ? MESES[rf.mes - 1] : ''].filter(Boolean).join(' · ');
+}
+
+async function loadRf() {
+  rf.carregando = true; rf.erro = '';
+  renderRfRes();
   try {
-    const r = await fetch('/api/receita-lojas?' + params, { headers: await authHeaders() });
+    const r = await fetch('/api/receita-lojas?' + rfParams(rf.page), { headers: await authHeaders() });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok) throw new Error(d.error || 'Erro ao consultar a base da Receita.');
     rf.rows = d.rows || []; rf.total = d.total || 0; rf.pageSize = d.page_size || 30;
@@ -1812,100 +1821,143 @@ async function deleteHistoryEntry(id) {
 }
 
 // ─── EXPORTAR ─────────────────────────────────────────────────
+const RF_EXPORT_MAX = 60000; // a tabela inteira cabe (hoje ~50 mil)
+const PDF_MAX = 3000;        // acima disso o PDF trava o navegador — usar CSV/Excel
+
 function pExp(c) {
   const ca = cos.filter(x=>x.abertura).length;
-  const mk = (modo, lbl, n, dis) => `
+  const mk = (modo, lbl, desc, n, dis) => `
     <div class="export-card">
       <h3>${lbl}</h3>
-      <p>${{todas:'Nome, tipo, telefone, endereço, avaliação e data de abertura.',favs:'Apenas as empresas marcadas como favorita para prospecção prioritária.',abertura:'Empresas com data de abertura identificada via CNPJ.'}[modo]}</p>
+      <p>${desc}</p>
       <div class="export-btns">
-        <button class="bex bex-csv" onclick="expCSV('${modo}')" ${dis?'disabled':''}>⬇ CSV (${n})</button>
-        <button class="bex bex-xls" onclick="expExcel('${modo}')" ${dis?'disabled':''}>📗 Excel</button>
-        <button class="bex bex-pdf" onclick="expPDF('${modo}')" ${dis?'disabled':''}>📄 PDF</button>
+        <button class="bex bex-csv" onclick="expCSV('${modo}', this)" ${dis?'disabled':''}>⬇ CSV${n === null ? '' : ` (${n})`}</button>
+        <button class="bex bex-xls" onclick="expExcel('${modo}', this)" ${dis?'disabled':''}>📗 Excel</button>
+        <button class="bex bex-pdf" onclick="expPDF('${modo}', this)" ${dis?'disabled':''}>📄 PDF</button>
       </div>
     </div>`;
+  const rfDesc = `Mesmos filtros da aba Lojas Novas: <strong>${escH(rfResumoFiltro())}</strong>. Exporta todas as páginas, não só as 30 da tela. <u style="cursor:pointer" onclick="go('r')">Alterar filtros</u>`;
+  const google = BUSCA_GOOGLE ? `
+      ${mk('todas','📊 Todas as empresas','Nome, tipo, telefone, endereço, avaliação e data de abertura.',cos.length,!cos.length)}
+      ${mk('abertura','📅 Com data de abertura','Empresas com data de abertura identificada via CNPJ.',ca,!ca)}` : '';
   c.innerHTML = `
     <div class="page-header"><h1>Exportar Relatórios</h1><p>Exporte seus leads em CSV, Excel ou PDF profissional.</p></div>
     <div class="stats-bar">
-      <div class="stat"><div class="num">${cos.length}</div><div class="lbl">Empresas</div></div>
+      <div class="stat"><div class="num">${rf.carregado ? rf.total : '—'}</div><div class="lbl">Lojas Novas (filtro)</div></div>
       <div class="stat"><div class="num">${favs.size}</div><div class="lbl">Favoritas</div></div>
-      <div class="stat"><div class="num">${ca}</div><div class="lbl">c/ Abertura</div></div>
-      <div class="stat"><div class="num">${hist.length}</div><div class="lbl">Buscas</div></div>
+      ${BUSCA_GOOGLE ? `<div class="stat"><div class="num">${cos.length}</div><div class="lbl">Empresas</div></div>
+      <div class="stat"><div class="num">${hist.length}</div><div class="lbl">Buscas</div></div>` : ''}
     </div>
     <div class="export-wrap">
-      ${mk('todas','📊 Todas as empresas',cos.length,!cos.length)}
-      ${mk('favs','⭐ Empresas favoritas',favs.size,!favs.size)}
-      ${mk('abertura','📅 Com data de abertura',ca,!ca)}
+      ${mk('receita','🏛 Lojas Novas (Receita Federal)',rfDesc,rf.carregado ? rf.total : null,rf.carregado && !rf.total)}
+      ${google}
+      ${mk('favs','⭐ Empresas favoritas','Apenas as empresas marcadas como favorita para prospecção prioritária.',favs.size,!favs.size)}
     </div>`;
 }
 
-function _getExportList(modo) {
+// Busca todas as páginas da Receita com os filtros atuais (blocos de 1000 linhas)
+async function _getRfExport(onProgress) {
+  const rows = [];
+  for (let page = 0; rows.length < RF_EXPORT_MAX; page++) {
+    const params = rfParams(page); params.set('exportar', '1');
+    const r = await fetch('/api/receita-lojas?' + params, { headers: await authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || 'Erro ao consultar a base da Receita.');
+    rows.push(...(d.rows || []));
+    onProgress(rows.length, d.total);
+    if (!d.rows || d.rows.length < d.page_size) break;
+  }
+  return rows;
+}
+
+// Colunas: [título, largura no Excel, vai no PDF?] + linhas já formatadas
+async function _exportData(modo, onProgress) {
+  if (modo === 'receita') {
+    const lista = await _getRfExport(onProgress);
+    return {
+      titulo: 'Lojas Novas — Receita Federal · ' + rfResumoFiltro(),
+      arquivo: 'receita_' + (rf.tipo || 'lojas'),
+      cols: [['Nome',30,1],['Razão Social',35,0],['Tipo',26,1],['CNPJ',18,1],['Data de Abertura',14,1],['Telefone',16,1],
+             ['Endereço',40,1],['Bairro',20,0],['CEP',10,0],['Cidade',20,1],['Estado',6,1]],
+      linhas: lista.map(x => [x.nome_fantasia || x.razao_social, x.razao_social, CNAE_NOME[x.cnae] || '', fmtCnpj(x.cnpj),
+        fmtData(x.data_abertura), x.telefone, [x.logradouro, x.numero, x.complemento].filter(Boolean).join(', '),
+        x.bairro, x.cep, x.municipio, x.uf]),
+    };
+  }
+  let lista = cos;
   if (modo === 'favs') {
     const map = new Map(favData);
     cos.filter(x => favs.has(x.id)).forEach(x => map.set(x.id, x));
-    return Array.from(map.values());
-  }
-  if (modo === 'abertura') return cos.filter(x => x.abertura);
-  return cos;
+    lista = Array.from(map.values());
+  } else if (modo === 'abertura') lista = cos.filter(x => x.abertura);
+  return {
+    titulo: {todas:'Todas as Empresas',favs:'Empresas Favoritas',abertura:'Empresas com Data de Abertura'}[modo] || modo,
+    arquivo: modo,
+    cols: [['Nome',30,1],['Tipo',22,1],['Telefone',18,1],['Endereço',40,1],['Cidade',18,0],['Estado',7,1],['Avaliação',10,1],
+           ['Data de Abertura',18,1],['Tempo de Atividade',22,0],['CNPJ',18,1],['Porte',15,0],['CNAE',40,0]],
+    linhas: lista.map(c => [c.nome, c.tipo, c.telefone, c.endereco, c.cidade, c.uf, c.avaliacao,
+      c.abertura ? fmtData(c.abertura) : '', c.abertura ? calcIdade(c.abertura) : '', c.cnpj, c.porte, c.cnae]),
+  };
 }
 
-function expCSV(modo) {
-  const lista = _getExportList(modo);
-  if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
-  const h = 'Nome,Tipo,Telefone,Endereço,Cidade,Estado,Avaliação,Data de Abertura,Tempo de Atividade,CNPJ,Porte\n';
+// Prepara os dados mostrando o progresso no botão clicado; null se não há o que exportar
+async function _prepExport(modo, btn) {
+  const txt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Preparando...'; }
+  try {
+    const dados = await _exportData(modo, (n, total) => { if (btn) btn.textContent = `⌛ ${n} de ${total}`; });
+    if (!dados.linhas.length) { alert('Nenhum dado para exportar.'); return null; }
+    return dados;
+  } catch(e) {
+    alert(e.message || 'Erro ao preparar a exportação.');
+    return null;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txt; }
+  }
+}
+const _nomeArquivo = (dados, ext) => `autolead_${dados.arquivo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.${ext}`;
+
+async function expCSV(modo, btn) {
+  const dados = await _prepExport(modo, btn);
+  if (!dados) return;
   const cell = v => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
-  const rows = lista.map(c => [c.nome, c.tipo, c.telefone, c.endereco, c.cidade, c.uf, c.avaliacao,
-    c.abertura ? fmtData(c.abertura) : '', c.abertura ? calcIdade(c.abertura) : '', c.cnpj, c.porte].map(cell).join(',')).join('\n');
+  const h = dados.cols.map(c => cell(c[0])).join(',') + '\n';
+  const rows = dados.linhas.map(l => l.map(cell).join(',')).join('\n');
   const b = new Blob(['﻿'+h+rows],{type:'text/csv;charset=utf-8;'});
   const u = URL.createObjectURL(b); const a = document.createElement('a');
-  a.href=u; a.download=`autolead_${modo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
+  a.href=u; a.download=_nomeArquivo(dados, 'csv');
   a.click(); URL.revokeObjectURL(u);
 }
 
-function expExcel(modo) {
+async function expExcel(modo, btn) {
   if (typeof XLSX === 'undefined') { alert('Biblioteca Excel não carregada. Verifique sua conexão.'); return; }
-  const lista = _getExportList(modo);
-  if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
-  const rows = lista.map(c => ({
-    'Nome':               c.nome||'',
-    'Tipo':               c.tipo||'',
-    'Telefone':           c.telefone||'',
-    'Endereço':           c.endereco||'',
-    'Cidade':             c.cidade||'',
-    'Estado':             c.uf||'',
-    'Avaliação':          c.avaliacao||'',
-    'Data de Abertura':   c.abertura ? fmtData(c.abertura) : '',
-    'Tempo de Atividade': c.abertura ? calcIdade(c.abertura) : '',
-    'CNPJ':               c.cnpj||'',
-    'Porte':              c.porte||'',
-    'CNAE':               c.cnae||'',
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [30,22,18,40,18,7,10,18,22,18,15,40].map(w => ({wch:w}));
+  const dados = await _prepExport(modo, btn);
+  if (!dados) return;
+  const ws = XLSX.utils.aoa_to_sheet([dados.cols.map(c => c[0]), ...dados.linhas.map(l => l.map(v => v ?? ''))]);
+  ws['!cols'] = dados.cols.map(c => ({wch:c[1]}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Leads AutoLead');
-  XLSX.writeFile(wb, `autolead_${modo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+  XLSX.writeFile(wb, _nomeArquivo(dados, 'xlsx'));
 }
 
-function expPDF(modo) {
-  const lista = _getExportList(modo);
-  if (!lista.length) { alert('Nenhum dado para exportar.'); return; }
-  const modeLabel = {todas:'Todas as Empresas',favs:'Empresas Favoritas',abertura:'Empresas com Data de Abertura'}[modo]||modo;
+async function expPDF(modo, btn) {
+  const w = window.open('','_blank'); // abre já no clique, senão o navegador bloqueia o popup
+  if (!w) { alert('Permita popups neste site para gerar o PDF.'); return; }
+  w.document.write('<p style="font-family:Arial;padding:20px">Preparando o relatório...</p>');
+  const dados = await _prepExport(modo, btn);
+  if (!dados) { w.close(); return; }
+  if (dados.linhas.length > PDF_MAX) {
+    w.close();
+    alert(`São ${dados.linhas.length} registros — o PDF aceita até ${PDF_MAX}. Use CSV ou Excel, ou filtre mais na aba Lojas Novas.`);
+    return;
+  }
+  const idx = dados.cols.map((c, i) => c[2] ? i : -1).filter(i => i >= 0);
   const date = new Date().toLocaleDateString('pt-BR');
-  const rows = lista.map((c,i) => `
-    <tr class="${i%2?'alt':''}">
-      <td>${i+1}</td>
-      <td><strong>${escH(c.nome||'—')}</strong></td>
-      <td>${escH(c.tipo||'—')}</td>
-      <td>${escH(c.telefone||'—')}</td>
-      <td style="font-size:9px">${escH(c.endereco||'—')}</td>
-      <td>${escH(c.uf||'—')}</td>
-      <td>${escH(c.avaliacao||'—')}</td>
-      <td>${c.abertura?fmtData(c.abertura):'—'}</td>
-      <td>${escH(c.cnpj||'—')}</td>
-    </tr>`).join('');
+  const titulo = escH(dados.titulo);
+  const rows = dados.linhas.map((l,i) => `
+    <tr class="${i%2?'alt':''}"><td>${i+1}</td>${idx.map((j,k) => `<td${k===0?' class="nm"':''}>${escH(l[j] || '—')}</td>`).join('')}</tr>`).join('');
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-    <title>AutoLead Brasil — ${modeLabel}</title>
+    <title>AutoLead Brasil — ${titulo}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
       body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px}
@@ -1916,6 +1968,7 @@ function expPDF(modo) {
       table{width:100%;border-collapse:collapse}
       th{background:#1e3a5f;color:#fff;padding:7px 5px;text-align:left;font-size:10px;font-weight:700}
       td{padding:5px 5px;border-bottom:1px solid #e5e7eb;font-size:10px;vertical-align:top}
+      td.nm{font-weight:700}
       tr.alt td{background:#f9fafb}
       .ftr{margin-top:16px;border-top:1px solid #e5e7eb;padding-top:8px;font-size:9px;color:#999;text-align:center}
       .print-btn{margin-top:18px;text-align:center}
@@ -1924,23 +1977,22 @@ function expPDF(modo) {
   </head><body>
     <div class="hdr">
       <div><h1>AutoLead Brasil</h1><div class="sub">Prospecção Automotiva Profissional</div></div>
-      <div style="text-align:right"><strong>${modeLabel}</strong><br><span class="sub">${date}</span></div>
+      <div style="text-align:right"><strong>${titulo}</strong><br><span class="sub">${date}</span></div>
     </div>
     <div class="meta">
-      <span>📊 ${lista.length} registro${lista.length!==1?'s':''}</span>
+      <span>📊 ${dados.linhas.length} registro${dados.linhas.length!==1?'s':''}</span>
       <span>📅 Gerado em ${date}</span>
     </div>
     <table>
-      <thead><tr><th>#</th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>Endereço</th><th>UF</th><th>Aval.</th><th>Abertura</th><th>CNPJ</th></tr></thead>
+      <thead><tr><th>#</th>${idx.map(j => `<th>${escH(dados.cols[j][0])}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div class="ftr">AutoLead Brasil · ${lista.length} registros · ${date}</div>
+    <div class="ftr">AutoLead Brasil · ${dados.linhas.length} registros · ${date}</div>
     <div class="print-btn">
       <button onclick="window.print()" style="padding:10px 28px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700">🖨 Imprimir / Salvar PDF</button>
     </div>
   </body></html>`;
-  const w = window.open('','_blank');
-  if (!w) { alert('Permita popups neste site para gerar o PDF.'); return; }
+  w.document.open();
   w.document.write(html);
   w.document.close();
 }

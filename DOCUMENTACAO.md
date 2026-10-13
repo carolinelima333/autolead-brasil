@@ -754,6 +754,9 @@ Receita (publicados 1x por mês).
   com filtros de tipo (Lojas de pneus / Frotistas — começa pelo modo da última busca), estado
   (ou Brasil todo), cidade, ano e mês, sem precisar de busca. Lojas que já estão nos cards do Google
   ou no CRM (`company_id = cnpj:<número>`) não se repetem.
+- **Aba Exportar:** o card "Lojas Novas (Receita Federal)" exporta em CSV, Excel ou PDF com os **mesmos filtros**
+  da aba Lojas Novas (`rfParams()`), buscando todas as páginas em blocos de 1000 (`exportar=1` na API).
+  PDF limitado a 3000 registros.
 - **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.
 
 ### 8.5. Deduplicação de Resultados
