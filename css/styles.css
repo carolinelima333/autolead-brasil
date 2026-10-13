@@ -182,6 +182,7 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 .cc-type{display:inline-flex;align-items:center;gap:.3rem;background:var(--yel-dim);color:var(--yel);font-size:10px;padding:3px 8px;border-radius:5px;font-weight:700;margin-bottom:.6rem;border:1px solid rgba(255,193,7,.15)}
 .cc-addr{font-size:11px;color:var(--txt2);margin-bottom:.3rem;line-height:1.4}
 .cc-phone{font-size:11px;color:var(--blue);margin-bottom:.3rem;font-weight:500}
+.ab-contato{margin-bottom:.4rem}
 .cc-since{font-size:11px;color:var(--green);margin-bottom:.8rem;font-weight:500}
 .cc-no-since{font-size:11px;color:var(--txt3);margin-bottom:.8rem;font-style:italic}
 .cc-sep{border:none;border-top:1px solid var(--border);margin:.7rem 0}

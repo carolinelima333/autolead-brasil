@@ -945,22 +945,17 @@ async function loadDetails(co) {
   if (cardEl) cardEl.replaceWith(mkCard(co));
 }
 
-// Carrega telefone/site automaticamente dos cards exibidos (5 requisições em paralelo)
-// e, se a lista veio de uma busca, atualiza o cache para não repetir as chamadas.
-async function autoLoadDetails(lista) {
-  const pend = lista.filter(co => !co._detailsLoaded && !co._detailsLoading && co.id);
-  if (!pend.length) return;
-  pend.forEach(co => co._detailsLoading = true);
+// Telefone/site só sob demanda: cada Place Details é uma chamada paga ao Google.
+// Depois de carregado, atualiza o cache da busca para não pagar de novo.
+async function verContato(idx) {
+  const co = cos[idx];
+  if (!co || co._detailsLoaded || co._detailsLoading || !co.id) return;
+  co._detailsLoading = true;
+  const btn = g('vc_' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Carregando contato...'; }
   const ctx = cacheCtx;
-  let i = 0;
-  const worker = async () => {
-    while (i < pend.length) {
-      const co = pend[i++];
-      await loadDetails(co);
-      delete co._detailsLoading;
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(5, pend.length) }, worker));
+  await loadDetails(co);
+  delete co._detailsLoading;
   if (ctx && ctx === cacheCtx) await saveToCache(ctx.key, ctx.uf, ctx.cid, cos);
 }
 
@@ -1113,7 +1108,6 @@ function exibir() {
     pagina.forEach(x => gr.appendChild(mkCard(x)));
     el.appendChild(gr);
     if (totalPages > 1) el.appendChild(mkPagination(currentPage, totalPages));
-    autoLoadDetails(pagina);
   }
 }
 
@@ -1163,7 +1157,7 @@ function mkCard(co) {
     ? `<div class="cc-phone">📞 ${escH(co.telefone)}</div>`
     : co._detailsLoaded
       ? `<div class="cc-phone" style="color:var(--txt3);font-size:11px">Telefone não disponível</div>`
-      : `<div class="cc-phone" style="color:var(--txt3);font-size:11px">⌛ Carregando contato...</div>`;
+      : `<button class="ab ab-contato" id="vc_${idx}" onclick="verContato(${idx})">📞 Ver contato</button>`;
 
   const mapsBtn = co.gmaps_url
     ? linkBtn(co.gmaps_url, '🗺 Maps')

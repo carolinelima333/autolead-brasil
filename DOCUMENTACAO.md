@@ -384,6 +384,9 @@ Busca empresas via Google Places Text Search API.
 
 Retorna detalhes completos de uma empresa pelo place_id.
 
+Chamada paga ao Google: o frontend só a faz quando o usuário clica em **📞 Ver contato** no card
+(`verContato(idx)`); o resultado vai para o cache da busca e não é pedido de novo.
+
 **Parâmetros:**
 
 | Parâmetro | Obrigatório | Descrição |
