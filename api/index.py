@@ -866,9 +866,7 @@ def static_files(path):
 
 
 if __name__ == '__main__':
-    port   = int(os.getenv('PORT', 3000))
-    key_ok = bool(GOOGLE_API_KEY)
+    port = int(os.getenv('PORT', 3000))
     print(f'\n✅  AutoLead Brasil rodando em http://localhost:{port}')
-    print(f'🔑  Google API Key: {"configurada" if key_ok else "NÃO CONFIGURADA — crie o arquivo .env com GOOGLE_API_KEY"}')
     print('Pressione Ctrl+C para parar.\n')
     app.run(host='0.0.0.0', port=port, debug=False)

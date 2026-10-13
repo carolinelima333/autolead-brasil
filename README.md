@@ -71,7 +71,6 @@ cp .env.example .env
 Edite o arquivo `.env` com suas chaves:
 
 ```env
-GOOGLE_API_KEY=sua_chave_google_aqui
 PORT=3000
 SUPABASE_SERVICE_KEY=sua_service_role_key_aqui
 SUPABASE_URL=https://SEU_PROJETO.supabase.co
@@ -137,7 +136,6 @@ Ou conecte o repositório diretamente em [vercel.com](https://vercel.com) para d
 
 | Nome | Valor |
 |------|-------|
-| `GOOGLE_API_KEY` | Chave da Google Places API |
 | `SUPABASE_URL` | URL do seu projeto Supabase |
 | `SUPABASE_SERVICE_KEY` | Chave `service_role` do Supabase |
 

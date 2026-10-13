@@ -678,7 +678,6 @@ Isso garante que um usuário nunca consegue ler ou escrever dados de outro usuá
 
 | Chave | Localização | Nível de Exposição |
 |---|---|---|
-| `GOOGLE_API_KEY` | Backend (`.env`) | Privada — nunca exposta ao navegador |
 | `SUPABASE_SERVICE_KEY` | Backend (`.env`) | Privada — tem permissão de admin |
 | `SUPABASE_URL` | Frontend (HTML inline) | Pública — necessário para o SDK |
 | `SUPABASE_ANON_KEY` | Frontend (HTML inline) | Pública — acesso limitado pelo RLS |
@@ -840,7 +839,6 @@ Link direto para conversa via `https://wa.me/{telefone}` (sem API, apenas URL).
 
 | Variável | Descrição | Obrigatório |
 |---|---|---|
-| `GOOGLE_API_KEY` | Chave da Google Places API | Sim |
 | `SUPABASE_URL` | URL do projeto Supabase | Sim |
 | `SUPABASE_SERVICE_KEY` | Chave `service_role` do Supabase (admin) | Sim |
 | `PORT` | Porta do servidor local (padrão: 3000) | Não |
@@ -887,7 +885,6 @@ O projeto está configurado para deploy no **Vercel**.
 
 **Variáveis de ambiente no Vercel:**
 Configure em Dashboard → Projeto → Settings → Environment Variables:
-- `GOOGLE_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
 
@@ -910,7 +907,6 @@ Configure em Dashboard → Projeto → Settings → Environment Variables:
 ### Pré-requisitos
 
 - Python 3.8+
-- Conta no Google Cloud com Places API ativada
 - Projeto no Supabase com tabelas criadas
 
 ### Passo a Passo
@@ -944,7 +940,6 @@ cp .env.example .env
 
 Edite `.env`:
 ```env
-GOOGLE_API_KEY=sua_chave_aqui
 PORT=3000
 SUPABASE_SERVICE_KEY=sua_service_role_key_aqui
 SUPABASE_URL=https://SEU_PROJETO.supabase.co

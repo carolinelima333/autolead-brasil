@@ -1063,7 +1063,7 @@ async function buscar() {
       <div class="empty">
         <div class="ei">⚠️</div>
         <p style="color:var(--red);font-weight:700">Erro ao buscar dados</p>
-        <small style="line-height:1.8">${e.message || 'Erro desconhecido'}<br>Verifique: servidor rodando · GOOGLE_API_KEY no .env · Places API ativada no Google Cloud</small>
+        <small style="line-height:1.8">${e.message || 'Erro desconhecido'}<br>Verifique se o servidor está rodando.</small>
       </div>`;
   }
   g('bbs').disabled = false;
