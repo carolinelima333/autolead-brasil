@@ -264,6 +264,9 @@
 // ─── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL = 'https://nbigfrdezkozzwqozvlp.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iaWdmcmRlemtvenp3cW96dmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDk2NjAsImV4cCI6MjA5MzQ4NTY2MH0.LWKWOvpIjkdd1w8aoAvixfNrpa1TuoX3B0mZ90_gXhM';
+// Busca no Google (aba Buscar, Histórico e chamadas pagas) desligada a pedido da usuária: a prospecção
+// passa a ser pela base da Receita (aba Lojas Novas). Para religar: true aqui e BUSCA_GOOGLE no api/index.py.
+const BUSCA_GOOGLE = false;
 const TERMS_VENDEDORES  = ['distribuidora de pneus','atacadista de pneus','loja de pneus','revenda de pneus','pneus truck center'];
 const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviario','logistica transporte cargas'];
 
@@ -284,7 +287,7 @@ const CACHE_TTL_DAYS = 7;
 
 // ─── ESTADO ───────────────────────────────────────────────────
 let sb = null;
-let user = null, signup = false, ctab = 'b';
+let user = null, signup = false, ctab = BUSCA_GOOGLE ? 'b' : 'r';
 let cos = [], favs = new Set(), favData = new Map(), hist = [], filterType = 'todos';
 const ADMIN_EMAIL = 'carolinelima313@gmail.com';
 const isAdmin = () => !!user && user.email.toLowerCase() === ADMIN_EMAIL;
@@ -505,6 +508,7 @@ async function enterApp(authUser) {
   if (g('drawer-em')) g('drawer-em').textContent = user.email;
   const isAdm = isAdmin();
   ['na','dna','bna'].forEach(id => { const el = g(id); if (el) el.style.display = isAdm ? '' : 'none'; });
+  ['nb','dnb','bnb','nh','dnh','bnh'].forEach(id => { const el = g(id); if (el) el.style.display = BUSCA_GOOGLE ? '' : 'none'; });
   if (isAdm) refreshAdminCount();
   loadFavs();
   loadDailyLimits();
@@ -512,7 +516,7 @@ async function enterApp(authUser) {
     window._storesList = list;
     if (ctab === 'b' && filterType === 'novo') exibir();
   });
-  await autoRestoreLastSearch();
+  if (BUSCA_GOOGLE) await autoRestoreLastSearch();
   go('b');
 }
 
@@ -591,6 +595,7 @@ async function logout() {
 // ─── NAVEGAÇÃO ────────────────────────────────────────────────
 const TABS = ['b','r','f','h','e','s','a'];
 function go(t) {
+  if (!BUSCA_GOOGLE && (t === 'b' || t === 'h')) t = 'r';
   ctab = t;
   TABS.forEach(x => ['n','dn','bn'].forEach(p => { const el = g(p+x); if(el) el.classList.toggle('on', x===t); }));
   render();
@@ -961,6 +966,7 @@ async function verContato(idx) {
 
 // ─── BUSCAR ───────────────────────────────────────────────────
 async function buscar() {
+  if (!BUSCA_GOOGLE) return;
   const uf = g('suf').value;
   const cid = (g('scid').value || '').trim();
   if (!uf) { alert('Selecione o estado.'); return; }
@@ -1272,7 +1278,7 @@ async function cruzarReceita(uf, list) {
 
 function pReceita(c) {
   c.innerHTML = `
-    <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus e frotistas abertos desde ${ANO_NOVAS} que ainda não apareceram nas suas buscas do Google — base oficial da Receita Federal</p></div>
+    <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus e frotistas abertos desde ${ANO_NOVAS} — base oficial da Receita Federal</p></div>
     <div id="rf-sec"></div>`;
   renderRfSec();
 }
@@ -1291,7 +1297,7 @@ function renderRfSec() {
   el.innerHTML = `
     <div class="search-panel rf-panel">
       <h3>🔍 Filtrar empresas novas</h3>
-      <p class="rf-sub">${frota ? 'Frotistas e transportadoras (transporte rodoviário de carga), sem MEI' : 'Atacado e varejo de pneus, sem MEI e sem borracharias'}${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. As empresas que já aparecem na sua busca atual (com borda verde nos cards) ou que já foram registradas não se repetem aqui.</p>
+      <p class="rf-sub">${frota ? 'Frotistas e transportadoras (transporte rodoviário de carga), sem MEI' : 'Atacado e varejo de pneus, sem MEI e sem borracharias'}${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. ${BUSCA_GOOGLE ? 'As empresas que já aparecem na sua busca atual (com borda verde nos cards) ou que já foram registradas' : 'As empresas já registradas'} não se repetem aqui.</p>
       <div class="srow">
         <select id="rf-tipo"><option value="lojas"${frota?'':' selected'}>🏪 Lojas de pneus</option><option value="frotistas"${frota?' selected':''}>🚛 Frotistas / Compradores</option></select>
         <select id="rf-uf">${ufOpts}</select>
@@ -1324,7 +1330,7 @@ async function loadRf() {
   rf.carregando = true; rf.erro = '';
   renderRfRes();
   // Não repete lojas que já estão nos cards do Google ou registradas no CRM
-  const excluir = new Set(cos.map(c => c.cnpj).filter(Boolean));
+  const excluir = new Set(BUSCA_GOOGLE ? cos.map(c => c.cnpj).filter(Boolean) : []);
   (window._storesList || []).forEach(s => { if ((s.company_id || '').startsWith('cnpj:')) excluir.add(s.company_id.slice(5)); });
   const params = new URLSearchParams({ tipo: rf.tipo, page: rf.page });
   if (rf.uf) params.set('uf', rf.uf);

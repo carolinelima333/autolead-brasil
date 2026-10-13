@@ -731,6 +731,10 @@ aberta nos **últimos 3 anos** (ano atual e os dois anteriores — `ANO_NOVAS` n
 
 ### 8.4.1. Lojas e frotistas novos da Receita Federal
 
+> **Busca no Google desativada** (`BUSCA_GOOGLE = false` no `index.html` e `BUSCA_GOOGLE = False` no
+> `api/index.py`): as abas Buscar e Histórico ficam ocultas, o sistema abre direto em Lojas Novas e as rotas
+> `/api/buscar` e `/api/details` respondem 503. Para religar, voltar as duas flags para verdadeiro.
+
 A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) e os frotistas
 (CNAE 4930-2/02, transporte rodoviário de carga — o mesmo `CNAE_COMPRADOR` da validação de lead)
 **ativos**, abertos nos últimos 3 anos, sem MEI e sem borracharia/recapagem no nome. O tipo sai da coluna `cnae`. Origem: dados abertos do CNPJ da

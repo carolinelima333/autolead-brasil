@@ -329,6 +329,17 @@ def _require_user():
     return None
 
 
+# Busca no Google (Text Search + Place Details, ambas pagas) desligada a pedido da usuária: a prospecção
+# passa a ser pela base da Receita. Para religar: True aqui e BUSCA_GOOGLE no index.html.
+BUSCA_GOOGLE = False
+
+
+def _busca_google_off():
+    if BUSCA_GOOGLE:
+        return None
+    return jsonify({'ok': False, 'error': 'A busca no Google está desativada.'}), 503
+
+
 def _require_admin():
     """Valida o token do Supabase enviado pelo navegador e confere se é a adm.
     Retorna None se autorizado, ou a resposta de erro pronta."""
@@ -756,7 +767,7 @@ def api_receita_match():
 
 @app.route('/api/buscar')
 def api_buscar():
-    err = _require_user()
+    err = _require_user() or _busca_google_off()
     if err:
         return err
     uf          = request.args.get('uf',          '').strip().upper()
@@ -779,7 +790,7 @@ def api_buscar():
 
 @app.route('/api/details')
 def api_details():
-    err = _require_user()
+    err = _require_user() or _busca_google_off()
     if err:
         return err
     place_id = request.args.get('place_id', '').strip()

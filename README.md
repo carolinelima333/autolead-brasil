@@ -6,6 +6,10 @@ Plataforma web de prospecção de leads no setor automotivo (pneus), com busca v
 
 ## Funcionalidades
 
+> **Busca no Google desativada** (flag `BUSCA_GOOGLE` em `index.html` e `api/index.py`): a prospecção é feita
+> pela base da Receita, na aba **Lojas Novas**. As abas Buscar e Histórico ficam ocultas e `/api/buscar` e
+> `/api/details` respondem 503, sem nenhuma chamada paga. O código continua no projeto para religar.
+
 - Busca de empresas por estado ou cidade via Google Places API
 - Dois modos de busca: **Lojas & Atacadistas** e **Frotistas / Compradores**
 - Filtragem automática de borracharias (serviços de reparo)
