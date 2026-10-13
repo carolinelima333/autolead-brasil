@@ -273,12 +273,18 @@ const TERMS_COMPRADORES = ['transportadora cargas','empresa transporte rodoviari
 // 4530-7/02 atacado e 4530-7/05 varejo de pneumáticos (autopeças fica de fora)
 const CNAE_VENDEDOR  = ['4530702','4530705'];
 const CNAE_NOME      = { '4530702': 'Atacado de pneus', '4530705': 'Varejo de pneus', '4930202': 'Transporte rodoviário de carga' };
-// "Loja nova" = aberta nos últimos 3 anos (ano atual e os 2 anteriores) — mesma janela da base da Receita
+// "Loja nova" = aberta nos últimos 3 anos (ano atual e os 2 anteriores)
 const ANO_NOVAS      = new Date().getFullYear() - 2;
+// A base da Receita vai mais longe: empresas ativas abertas desde ANO_RECEITA (ANO_MIN em scripts/atualizar_receita.py)
+const ANO_RECEITA    = 2010;
 const MESES          = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CNAE_COMPRADOR = ['4930202'];
-// Selo das empresas novas da Receita: frotista (CNAE_COMPRADOR) ou loja de pneus
-const rfSelo = (cnae, iso) => CNAE_COMPRADOR.includes(cnae) ? `🆕 Frotista novo — aberto em ${mesAno(iso)}` : `🆕 Loja nova — aberta em ${mesAno(iso)}`;
+// Selo das empresas da Receita: frotista (CNAE_COMPRADOR) ou loja de pneus; "novo" só desde ANO_NOVAS
+const rfSelo = (cnae, iso) => {
+  const nova = abertaRecente(iso), frota = CNAE_COMPRADOR.includes(cnae);
+  if (frota) return `${nova ? '🆕 Frotista novo' : '🚛 Frotista'} — aberto em ${mesAno(iso)}`;
+  return `${nova ? '🆕 Loja nova' : '🏪 Loja'} — aberta em ${mesAno(iso)}`;
+};
 const CNAE_BLOQUEADO = ['4520006'];
 
 const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
@@ -1269,17 +1275,19 @@ async function cruzarReceita(uf, list) {
       rfVistos.add(c);
       const m = matches[c.id];
       if (!m) { delete c._rf; return; }
-      c._rf = { abertura: m.data_abertura, cnae: m.cnae };
       rf.carregado = false; // a lista da Receita precisa sair sem as lojas que já estão no Google
       c.cnpj = m.cnpj;
       if (!c.abertura) c.abertura = m.data_abertura;
+      // Borda verde e selo "nova" só para as abertas nos últimos 3 anos (a base vai até ANO_RECEITA)
+      if (abertaRecente(m.data_abertura)) c._rf = { abertura: m.data_abertura, cnae: m.cnae };
+      else delete c._rf;
     });
   } catch(e) { console.warn('[receita] cruzamento:', e); }
 }
 
 function pReceita(c) {
   c.innerHTML = `
-    <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus e frotistas abertos desde ${ANO_NOVAS} — base oficial da Receita Federal</p></div>
+    <div class="page-header"><h1>Lojas Novas</h1><p>Lojas de pneus e frotistas ativos abertos desde ${ANO_RECEITA} — base oficial da Receita Federal. Os abertos desde ${ANO_NOVAS} levam o selo 🆕.</p></div>
     <div id="rf-sec"></div>`;
   renderRfSec();
 }
@@ -1292,12 +1300,12 @@ function renderRfSec() {
   const ufOpts = '<option value="">Brasil todo</option>' + UFS.map(u => `<option value="${u}"${rf.uf===u?' selected':''}>${u}</option>`).join('');
   const anoAtual = new Date().getFullYear();
   const anos = [];
-  for (let a = anoAtual; a >= ANO_NOVAS; a--) anos.push(a);
+  for (let a = anoAtual; a >= ANO_RECEITA; a--) anos.push(a);
   const anoOpts = '<option value="">Todos os anos</option>' + anos.map(a => `<option value="${a}"${String(rf.ano)===String(a)?' selected':''}>${a}</option>`).join('');
   const mesOpts = '<option value="">Todos os meses</option>' + MESES.map((m, i) => `<option value="${i+1}"${String(rf.mes)===String(i+1)?' selected':''}>${m}</option>`).join('');
   el.innerHTML = `
     <div class="search-panel rf-panel">
-      <h3>🔍 Filtrar empresas novas</h3>
+      <h3>🔍 Filtrar empresas da Receita</h3>
       <p class="rf-sub">${frota ? 'Frotistas e transportadoras (transporte rodoviário de carga), sem MEI' : 'Atacado e varejo de pneus, sem MEI e sem borracharias'}${rf.rows[0] ? ` · base da Receita de ${escH(rf.rows[0].referencia)}` : ''}. ${BUSCA_GOOGLE ? 'As empresas que já aparecem na sua busca atual (com borda verde nos cards) ou que já foram registradas' : 'As empresas já registradas'} não se repetem aqui.</p>
       <div class="srow">
         <select id="rf-tipo"><option value="lojas"${frota?'':' selected'}>🏪 Lojas de pneus</option><option value="frotistas"${frota?' selected':''}>🚛 Frotistas / Compradores</option></select>
@@ -1366,11 +1374,11 @@ function renderRfRes() {
   const el = g('rf-res'); if (!el) return;
   if (rf.carregando) { el.innerHTML = '<div class="ld"><div class="spin"></div><div style="font-size:12px;color:var(--txt3)">Consultando a base da Receita...</div></div>'; return; }
   if (rf.erro) { el.innerHTML = `<div class="empty"><div class="ei">⚠️</div><p>${escH(rf.erro)}</p><small><u style="cursor:pointer" onclick="loadRf()">Tentar de novo</u></small></div>`; return; }
-  if (!rf.rows.length) { el.innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma ${rf.tipo === 'frotistas' ? 'empresa' : 'loja'} nova da Receita com esses filtros.</p><small>Tente outro tipo, estado, cidade, ano ou mês.</small></div>`; return; }
+  if (!rf.rows.length) { el.innerHTML = `<div class="empty"><div class="ei">🔍</div><p>Nenhuma ${rf.tipo === 'frotistas' ? 'empresa' : 'loja'} da Receita com esses filtros.</p><small>Tente outro tipo, estado, cidade, ano ou mês.</small></div>`; return; }
   const totalPages = Math.max(1, Math.ceil(rf.total / rf.pageSize));
   el.innerHTML = `
     <div class="results-header">
-      <div class="count"><span>${rf.total}</span> ${rf.tipo === 'frotistas' ? `frotista${rf.total!==1?'s':''} novo${rf.total!==1?'s':''}` : `loja${rf.total!==1?'s':''} nova${rf.total!==1?'s':''}`} na Receita</div>
+      <div class="count"><span>${rf.total}</span> ${rf.tipo === 'frotistas' ? `frotista${rf.total!==1?'s':''}` : `loja${rf.total!==1?'s':''}`} na Receita</div>
       ${totalPages > 1 ? `<div class="page-info">Página ${rf.page+1} de ${totalPages}</div>` : ''}
     </div>`;
   const gr = document.createElement('div'); gr.className = 'grid';
@@ -1384,14 +1392,14 @@ function rfEndereco(x) {
 }
 
 function mkRfCard(x) {
-  const d = document.createElement('div'); d.className = 'cc cc-nova';
+  const d = document.createElement('div'); d.className = abertaRecente(x.data_abertura) ? 'cc cc-nova' : 'cc';
   const nome = x.nome_fantasia || x.razao_social;
   const end = rfEndereco(x);
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([nome, end, x.municipio, x.uf].join(' '));
   const cnpj = escJs(x.cnpj);
   d.innerHTML = `
     <div class="cc-top"><div class="cc-name">${escH(nome)}</div></div>
-    <div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap"><span class="badge-nova">${escH(rfSelo(x.cnae, x.data_abertura))}</span><span class="badge-blue">🏛 Só na Receita</span></div>
+    <div style="margin-bottom:5px;display:flex;gap:5px;flex-wrap:wrap"><span class="${abertaRecente(x.data_abertura) ? 'badge-nova' : 'badge-yel'}">${escH(rfSelo(x.cnae, x.data_abertura))}</span><span class="badge-blue">🏛 Só na Receita</span></div>
     <div class="cc-type">${escH(CNAE_NOME[x.cnae] || 'Empresa')} · CNPJ ${escH(fmtCnpj(x.cnpj))}</div>
     ${x.nome_fantasia ? `<div class="cc-type" style="font-size:10px">${escH(x.razao_social)}</div>` : ''}
     <div class="cc-addr">📍 ${escH(end)}${end ? ', ' : ''}${escH(x.municipio)}/${escH(x.uf)}${x.cep ? ' · CEP ' + escH(x.cep) : ''}</div>

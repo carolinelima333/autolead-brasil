@@ -1,4 +1,4 @@
-"""Atualiza a tabela lojas_receita com as lojas de pneus e os frotistas abertos nos últimos 3 anos.
+"""Atualiza a tabela lojas_receita com as lojas de pneus e os frotistas ativos abertos desde 2010.
 
 Fonte: dados abertos do CNPJ da Receita Federal (publicados uma vez por mês).
 Roda sozinho pelo GitHub Actions (.github/workflows/atualizar-receita.yml) ou à mão:
@@ -50,6 +50,9 @@ SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://nbigfrdezkozzwqozvlp.supabase.
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '').strip()
 TABELA = 'lojas_receita'
 LOTE = 500
+# Ano de abertura mínimo (~180 mil empresas na base de 2026-09, ~100 MB no banco).
+# A tela marca como "nova" só as dos últimos 3 anos (ANO_NOVAS no index.html).
+ANO_MIN = 2010
 
 
 def log(msg: str) -> None:
@@ -215,7 +218,7 @@ def enviar(rows: list[dict], mes: str, forcar: bool) -> None:
                              headers=sb_headers(Prefer='resolution=merge-duplicates,return=minimal'))
         if not resp.ok:
             raise RuntimeError(f'Supabase recusou o lote {i // LOTE + 1} (HTTP {resp.status_code})')
-    # Só agora remove o que não está mais na base (fechou, mudou de atividade ou saiu da janela de 3 anos)
+    # Só agora remove o que não está mais na base (fechou, mudou de atividade ou virou MEI)
     resp = requests.delete(f'{SUPABASE_URL}/rest/v1/{TABELA}', params={'referencia': f'neq.{mes}'},
                            headers=sb_headers(Prefer='return=minimal'), timeout=60)
     if not resp.ok:
@@ -229,6 +232,7 @@ def main() -> int:
     ap.add_argument('--mes', help='pasta da Receita (AAAA-MM); padrão: a mais recente')
     ap.add_argument('--forcar', action='store_true', help='grava mesmo se a lista nova for bem menor')
     ap.add_argument('--de-csv', metavar='ARQUIVO.csv', help='grava no Supabase um CSV gerado antes com --teste')
+    ap.add_argument('--ano-min', type=int, help=f'ano de abertura mínimo; padrão: {ANO_MIN}')
     args = ap.parse_args()
 
     if not args.teste and not SUPABASE_KEY:
@@ -247,7 +251,10 @@ def main() -> int:
         return 0
 
     mes = args.mes or mes_mais_recente()
-    ano_min = date.today().year - 2
+    ano_min = args.ano_min or ANO_MIN
+    if not 2000 <= ano_min <= date.today().year:
+        log(f'--ano-min inválido: {ano_min}')
+        return 1
     log(f'Base da Receita: {mes} — lojas de pneus e frotistas ativos abertos desde {ano_min}')
     with tempfile.TemporaryDirectory() as pasta:
         rows = montar(mes, pasta, ano_min)

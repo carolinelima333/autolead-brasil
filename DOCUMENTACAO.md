@@ -736,7 +736,9 @@ aberta nos **últimos 3 anos** (ano atual e os dois anteriores — `ANO_NOVAS` n
 
 A tabela `lojas_receita` guarda as lojas de pneus (CNAE 4530-7/02 e 4530-7/05) e os frotistas
 (CNAE 4930-2/02, transporte rodoviário de carga — o mesmo `CNAE_COMPRADOR` da validação de lead)
-**ativos**, abertos nos últimos 3 anos, sem MEI e sem borracharia/recapagem no nome. O tipo sai da coluna `cnae`. Origem: dados abertos do CNPJ da
+**ativos**, abertos desde 2010 (`ANO_MIN` no script, `ANO_RECEITA` na tela; ~180 mil empresas, ~100 MB),
+sem MEI e sem borracharia/recapagem no nome. Só os abertos nos últimos 3 anos (`ANO_NOVAS`) levam o selo
+verde "🆕 nova" e contam como Lead Novo; os mais antigos aparecem com selo amarelo e sem borda verde. O tipo sai da coluna `cnae`. Origem: dados abertos do CNPJ da
 Receita (publicados 1x por mês).
 
 - **Atualização:** `scripts/atualizar_receita.py`, rodado pelo GitHub Actions
