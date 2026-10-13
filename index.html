@@ -516,6 +516,7 @@ async function enterApp(authUser) {
     window._storesList = list;
     if (ctab === 'b' && filterType === 'novo') exibir();
   });
+  avisoReceita();
   if (BUSCA_GOOGLE) await autoRestoreLastSearch();
   go('b');
 }
@@ -2175,6 +2176,37 @@ function showToast(msg, color) {
   t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(0);background:${color==='red'?'var(--red)':'var(--green)'};color:#000;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3)`;
   t.textContent = msg; document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
+}
+
+// ─── AVISO DE BASE DA RECEITA ATUALIZADA ──────────────────────
+// O mês da base já visto fica no localStorage (por usuária). No primeiro acesso só registra;
+// quando o script mensal carrega um mês novo, aparece o aviso até ser fechado.
+const MESES_EXT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+async function avisoReceita() {
+  try {
+    const r = await fetch('/api/receita-info', { headers: await authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok || !d.referencia) return;
+    const chave = 'al_rf_ref:' + user.email;
+    let visto;
+    try { visto = localStorage.getItem(chave); } catch(e) { return; }
+    const marcar = () => { try { localStorage.setItem(chave, d.referencia); } catch(e) {} };
+    if (!visto) return marcar();
+    if (visto === d.referencia) return;
+    const [ano, mes] = String(d.referencia).split('-');
+    const mesTxt = MESES_EXT[+mes - 1] ? `${MESES_EXT[+mes - 1]}/${ano}` : d.referencia;
+    const quando = d.atualizado_em ? ` em ${fmtData(String(d.atualizado_em).slice(0, 10))}` : '';
+    const el = document.createElement('div');
+    el.className = 'rf-aviso';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `<span>📢 A base da Receita foi atualizada${escH(quando)}: agora com os dados de <b>${escH(mesTxt)}</b>.</span>
+      <button class="rf-aviso-ver">Ver Lojas Novas</button>
+      <button class="rf-aviso-x" aria-label="Fechar aviso">✕</button>`;
+    const fechar = () => { marcar(); el.remove(); };
+    el.querySelector('.rf-aviso-ver').onclick = () => { fechar(); go('r'); };
+    el.querySelector('.rf-aviso-x').onclick = fechar;
+    document.body.appendChild(el);
+  } catch(e) { console.warn('[receita] aviso:', e); }
 }
 
 // ─── UTILS ────────────────────────────────────────────────────

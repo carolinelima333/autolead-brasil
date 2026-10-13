@@ -756,6 +756,10 @@ Receita (publicados 1x por mês).
 - **Aba Exportar:** o card "Lojas Novas (Receita Federal)" exporta em CSV, Excel ou PDF com os **mesmos filtros**
   da aba Lojas Novas (`rfParams()`), buscando todas as páginas em blocos de 1000 (`exportar=1` na API).
   PDF limitado a 3000 registros.
+- **Aviso de atualização** (`GET /api/receita-info`): ao entrar, a tela consulta o mês da base carregada
+  (`referencia`) e compara com o último mês visto, guardado no `localStorage` por usuário (`al_rf_ref:<email>`).
+  Se mudou, aparece um aviso no topo ("A base da Receita foi atualizada…") com o botão *Ver Lojas Novas*;
+  ele some quando é fechado. No primeiro acesso só registra o mês, sem aviso.
 - **Custo:** nenhuma chamada ao Google; só consultas ao nosso Supabase.
 
 ### 8.5. Deduplicação de Resultados

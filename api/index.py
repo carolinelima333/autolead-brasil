@@ -696,6 +696,27 @@ def api_receita_lojas():
                     'page_size': tam})
 
 
+@app.route('/api/receita-info')
+def api_receita_info():
+    """Mês da base da Receita carregada e quando foi gravada — a tela avisa quando muda."""
+    err = _require_user()
+    if err:
+        return err
+    try:
+        resp = requests.get(f'{SUPABASE_URL}/rest/v1/lojas_receita',
+                            params={'select': 'referencia,atualizado_em',
+                                    'order': 'referencia.desc,atualizado_em.desc', 'limit': 1},
+                            headers=_sb_headers(), timeout=10)
+    except requests.RequestException as exc:
+        logger.error('[receita] info: %s', exc)
+        return jsonify({'ok': False, 'error': 'Erro ao consultar a base da Receita. Tente novamente.'}), 502
+    if not resp.ok:
+        return _rf_erro(resp)
+    rows = resp.json()
+    return jsonify({'ok': True, 'referencia': rows[0]['referencia'] if rows else None,
+                    'atualizado_em': rows[0]['atualizado_em'] if rows else None})
+
+
 @app.route('/api/receita-match', methods=['POST'])
 def api_receita_match():
     """Cruza os cards do Google com a base da Receita: mesmo CEP e (mesmo número ou nome parecido).
@@ -834,6 +855,8 @@ def api_dispatch():
         return api_cnpj()
     if action == 'receita-lojas':
         return api_receita_lojas()
+    if action == 'receita-info':
+        return api_receita_info()
     if action == 'receita-match':
         return api_receita_match()
     if action == 'reset-request':
