@@ -2,7 +2,7 @@
 <html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -1337,7 +1337,7 @@ async function deleteStore(id) {
 // ─── TOAST ────────────────────────────────────────────────────
 function showToast(msg, color) {
   const t = document.createElement('div'); t.className = 'toast';
-  t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(0);background:${color==='red'?'var(--red)':'var(--green)'};color:#000;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3)`;
+  t.style.background = color === 'red' ? 'var(--red)' : 'var(--green)';
   t.textContent = msg; document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
