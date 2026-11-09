@@ -108,7 +108,7 @@ body{font-family:'Inter',sans-serif;background:var(--blk);color:var(--txt);font-
 
 /* Bottom navigation (mobile) */
 .bot-nav{display:none;height:var(--bottom-nav-h);background:var(--g1);border-top:1px solid var(--border);flex-shrink:0;padding:0 .5rem;padding-bottom:env(safe-area-inset-bottom)}
-.bot-nav-inner{display:flex;height:100%;align-items:stretch}
+.bot-nav-inner{display:flex;flex:1;height:100%;align-items:stretch;max-width:560px;margin:0 auto}
 .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--txt3);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;border-radius:10px;transition:all .15s;touch-action:manipulation;padding:.3rem .2rem}
 .bnav-item svg{width:20px;height:20px}
 .bnav-item.on{color:var(--yel)}
